@@ -78,7 +78,7 @@ pub(crate) fn quote(path: &Path) -> String {
 }
 
 /// The launcher's entry, starting the binary at `exe`.
-pub fn launcher_entry(exe: &Path) -> String {
+pub fn launcher_entry(exe: &Path, icon: &Path) -> String {
     format!(
         "[Desktop Entry]\n\
          Type=Application\n\
@@ -87,26 +87,51 @@ pub fn launcher_entry(exe: &Path) -> String {
          Comment=Install, prepare and play crispylauncher, Minecraft: Java Edition {minecraft} rewritten in Rust\n\
          Exec={}\n\
          TryExec={}\n\
-         Icon=horizon\n\
+         Icon={}\n\
          Terminal=false\n\
          Categories=Game;\n\
          StartupWMClass=horizon-launcher\n",
         quote(exe),
         exe.display(),
+        icon.display(),
         minecraft = horizon_core::VANILLA_VERSION,
     )
 }
 
+/// The game's entry (the one that gives the game's window its icon on Wayland), with the icon
+/// named by its full path rather than by theme name. KDE resolves an `Icon=` name through its
+/// icon cache, and a window that asked for it before this install wrote the file keeps the
+/// placeholder it got then — even across restarts of the game, until the session ends. A path
+/// is looked up directly, so the window gets the picture the moment it opens.
+fn game_entry(icon: &Path) -> String {
+    let icon = format!("Icon={}", icon.display());
+    GAME_ENTRY_TEXT
+        .lines()
+        .map(|line| {
+            if line.starts_with("Icon=") {
+                icon.as_str()
+            } else {
+                line
+            }
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+        + "\n"
+}
+
 /// Every file this module writes, with its contents, under `data`.
 fn files(data: &Path, exe: &Path) -> Vec<(PathBuf, Vec<u8>)> {
+    // The 512 is what every menu and title bar scales down from, so it is the one both entries
+    // name: one picture, and no lookup that can come up empty.
+    let icon = data.join("icons/hicolor/512x512/apps/horizon.png");
     let mut out = vec![
         (
             data.join("applications").join(LAUNCHER_ENTRY),
-            launcher_entry(exe).into_bytes(),
+            launcher_entry(exe, &icon).into_bytes(),
         ),
         (
             data.join("applications").join(GAME_ENTRY),
-            GAME_ENTRY_TEXT.as_bytes().to_vec(),
+            game_entry(&icon).into_bytes(),
         ),
     ];
     for (size, bytes) in ICONS {
@@ -290,12 +315,38 @@ pub fn installed() -> bool {
 mod tests {
     use super::*;
 
+    /// The icon every entry names: the 512 the install writes, by full path.
+    fn installed_icon() -> PathBuf {
+        PathBuf::from("/home/a b/.local/share/icons/hicolor/512x512/apps/horizon.png")
+    }
+
     #[test]
     fn exec_paths_are_quoted() {
-        let entry = launcher_entry(Path::new("/home/a b/crispylauncher \"x\"/horizon-launcher"));
+        let entry = launcher_entry(
+            Path::new("/home/a b/crispylauncher \"x\"/horizon-launcher"),
+            &installed_icon(),
+        );
         assert!(entry.contains("Exec=\"/home/a b/crispylauncher \\\"x\\\"/horizon-launcher\"\n"));
         assert!(entry.contains("TryExec=/home/a b/crispylauncher \"x\"/horizon-launcher\n"));
-        assert!(entry.contains("Icon=horizon\n"));
+        assert!(
+            entry.contains("Icon=/home/a b/.local/share/icons/hicolor/512x512/apps/horizon.png\n")
+        );
+    }
+
+    /// A name is looked up through KDE's icon cache, which can answer with the placeholder a
+    /// window got before the icon existed; a path is read straight from disk.
+    #[test]
+    fn both_entries_name_the_icon_by_path() {
+        let game = game_entry(&installed_icon());
+        assert!(
+            game.contains("Icon=/home/a b/.local/share/icons/hicolor/512x512/apps/horizon.png\n")
+        );
+        assert!(!game.contains("Icon=horizon\n"));
+        assert!(
+            game.contains("NoDisplay=true\n"),
+            "still out of the app menu"
+        );
+        assert!(game.contains("StartupWMClass=horizon\n"));
     }
 
     #[test]
@@ -321,7 +372,10 @@ mod tests {
 
     #[test]
     fn the_target_is_try_exec_else_the_first_word_of_exec() {
-        let ours = launcher_entry(Path::new("/opt/a b/horizon \"x\"/horizon-launcher"));
+        let ours = launcher_entry(
+            Path::new("/opt/a b/horizon \"x\"/horizon-launcher"),
+            &installed_icon(),
+        );
         assert_eq!(
             entry_target(&ours).as_deref(),
             Some("/opt/a b/horizon \"x\"/horizon-launcher")
