@@ -165,13 +165,15 @@ struct Colors {
 }
 
 const NIGHT_ART: Colors = Colors {
-    sun: [0xffe28c, 0xffbf66, 0xff944f],
-    far: 0x3a1f5e,
-    near: 0x150f2e,
-    cloud: [0x3b2869, 0x6e3a7e, 0xc96a86],
-    lit: [0x5a3f8a, 0x9c5a92, 0xf7a98a],
-    shade: 0x2a1a4c,
-    star: 0xf4f2ff,
+    // The flat purple night: the sun keeps the warm note of the main action, the clouds and hills
+    // stay within the page's purples instead of the old magenta sunset.
+    sun: [0xffd9a8, 0xffb27f, 0xff9147],
+    far: 0x241b38,
+    near: 0x15101f,
+    cloud: [0x2b2342, 0x352a50, 0x453463],
+    lit: [0x3a2f56, 0x4b3b6c, 0x6a4f86],
+    shade: 0x1e1730,
+    star: 0xd9d2f0,
 };
 
 const DAWN_ART: Colors = Colors {

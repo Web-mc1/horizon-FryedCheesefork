@@ -74,25 +74,28 @@ pub struct Night {
 }
 
 pub const NIGHT: Night = Night {
-    sky: [0x07061a, 0x140f38, 0x2a1656, 0x5b2a78, 0xb0477d, 0xf08a5d],
-    page: 0x0e0b26,
-    side: 0x0a0820,
-    card: 0x15112e,
-    card_alpha: 0.84,
-    card_hi: 0x231c4a,
-    card_hi_alpha: 0.90,
-    stroke: 0xb9acff,
-    stroke_alpha: 0.12,
+    // Flat deep purple instead of the starry gradient: the launcher reads as one surface, and the
+    // cards carry the contrast.
+    sky: [0x1b1526, 0x1c1628, 0x1d1729, 0x1e182b, 0x1f192d, 0x201a2f],
+    page: 0x191322,
+    side: 0x1d1730,
+    card: 0x261f36,
+    card_alpha: 0.96,
+    card_hi: 0x322947,
+    card_hi_alpha: 0.98,
+    stroke: 0x9d8bd8,
+    stroke_alpha: 0.14,
     rule_alpha: 0.10,
-    ink: 0xf4f2ff,
-    ink_soft: 0xcfc9ea,
-    muted: 0xa59fc6,
-    accent: 0x7656fa,
-    accent_hi: 0xa08cff,
-    on_accent: 0xffffff,
-    success: 0x5fd39a,
-    warn: 0xf5b45a,
-    danger: 0xff8a78,
+    ink: 0xf7f4ff,
+    ink_soft: 0xd6cdea,
+    muted: 0xb3a8cd,
+    // The one main action is orange; its label is near-black, as on the reference.
+    accent: 0xff9b5e,
+    accent_hi: 0xffb27f,
+    on_accent: 0x201505,
+    success: 0x5fd3a3,
+    warn: 0xffd166,
+    danger: 0xff8b7a,
     dark: true,
 };
 
