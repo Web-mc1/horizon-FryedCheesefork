@@ -1,5 +1,5 @@
 //! Modpacks: import a Java modpack (a Modrinth `.mrpack`, a CurseForge zip, an instance folder),
-//! show what Horizon runs of it, port that on this computer from the player's own downloads, and
+//! show what crispylauncher runs of it, port that on this computer from the player's own downloads, and
 //! play it as a profile of its own (docs/modpacks.md).
 //!
 //! Each pack lives in `ports/<slug>/` in the game's home: the work folder `horizon-port-pack`
@@ -297,7 +297,7 @@ pub fn profile_home(work: &Path) -> PathBuf {
 
 /// Turns the game's command into this pack's profile: its own home (the player's options.txt
 /// copied in the first time, so keys and video settings carry over) and its carried-over mods.
-/// A modpack from Horizon's registry (`horizon-packs/<id>/`) plays its own profile the same way.
+/// A modpack from crispylauncher's registry (`horizon-packs/<id>/`) plays its own profile the same way.
 pub fn apply_profile(cmd: &mut Command, work: &Path) -> Result<(), String> {
     if horizon_pack::is_pack(work) {
         return horizon_pack::apply(cmd, work);

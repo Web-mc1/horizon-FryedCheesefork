@@ -1,6 +1,6 @@
-# Horizon launcher
+# crispylauncher launcher
 
-A small desktop app that installs Horizon builds, prepares them from your own copy of
+A small desktop app that installs crispylauncher builds, prepares them from your own copy of
 Minecraft, and starts the client or a dedicated server. Built with [GPUI](https://www.gpui.rs),
 Zed's UI framework; it has its own Cargo workspace and is not part of the game's builds.
 
@@ -23,7 +23,7 @@ The opening, then Play ([clip](docs/opening.webm)):
   preparer sources, else that version's own `horizon-prepare`; versions released before it
   still prepare with their Python script and need Python 3.10+. Before importing,
   preparation reuses checksum-verified game jars and libraries from the current
-  or another installed Horizon version, so the original Minecraft install is
+  or another installed crispylauncher version, so the original Minecraft install is
   only required when no valid imported copy exists.
 - **Download and prepare**: for a signed-in account that owns the game (asked again first),
   the launcher downloads the pinned version from Mojang itself (piston-meta, piston-data,
@@ -38,9 +38,9 @@ The opening, then Play ([clip](docs/opening.webm)):
   starts the game. With no install on the computer the Play page offers the download alone and the
   Minecraft folder row says none is needed. Without an owner,
   the Play page asks to sign in first. `horizon-launcher prepare --download`.
-- **Mods**: **Mods** and **Shader packs** search Horizon's own registry (a Java instance's mods
+- **Mods**: **Mods** and **Shader packs** search crispylauncher's own registry (a Java instance's mods
   come from Modrinth), **Resource packs** searches Modrinth, each marked Works, Partly or Doesn't
-  run in Horizon; Modrinth's data packs aren't usable yet and have no tab. Install puts a file in the game folder only after its checksum matches, and a
+  run in crispylauncher; Modrinth's data packs aren't usable yet and have no tab. Install puts a file in the game folder only after its checksum matches, and a
   modpack (the sidebar's +) goes to the Modpacks page; installed packs show their source and checksum, with Update,
   **Update all** and Remove ([docs/mod-browser.md](../docs/mod-browser.md)).
 - **Modpacks**: import a Java modpack (a Modrinth `.mrpack`, a CurseForge zip, or a Prism,
@@ -81,9 +81,9 @@ The opening, then Play ([clip](docs/opening.webm)):
   Stop sharing and offers **Limit them to Minecraft**: when your tailnet has Tailscale's default
   access controls, one click changes them so friends you share with reach only the server's
   port (Remove the limit undoes it); custom access controls are never rewritten, the page gives
-  the rule to add instead. Horizon never turns on Funnel.
+  the rule to add instead. crispylauncher never turns on Funnel.
 - **Instances**: separate game folders, each with its own worlds, options and packs. The game's
-  folder stays the first one, "Horizon", exactly where it was; imported and registry modpacks are
+  folder stays the first one, "crispylauncher", exactly where it was; imported and registry modpacks are
   instances too, in their own folders as before; new ones go to `instances/<name>/` in the game's
   folder, empty but for the player's options and name, or a copy of another instance (never its
   sign-in sessions, logs or data collection state). Names, icons (a block or item texture from the
@@ -131,7 +131,7 @@ The opening, then Play ([clip](docs/opening.webm)):
 - **Desktop shortcut**: Home's Instance row has **Shortcut**: a shortcut on the desktop that plays
   the selected instance without opening the launcher (`horizon-launcher play --instance <id>`).
   A `.desktop` file on Linux (also put in the applications menu, and marked trusted with `gio`
-  where it exists), a small app with Horizon's icon on macOS, a `.lnk` on Windows
+  where it exists), a small app with crispylauncher's icon on macOS, a `.lnk` on Windows
   (`horizon_launcher::shortcut`). **Remove shortcut** moves it to the trash; it is found by the
   instance id inside it, so a rename doesn't lose it. `horizon-launcher instance shortcut
   [instance] [--remove]`; `HORIZON_LAUNCHER_DESKTOP` points it at another folder.
@@ -146,8 +146,8 @@ The opening, then Play ([clip](docs/opening.webm)):
   [NAME]`, `account select <name>` (an account or an offline name), `account forget-offline
   <name>`.
 - **Accent and Home background**: on top of Dark, Light or System, Settings > Launcher picks an
-  accent (Horizon's violet, blue, teal, green, amber, red or pink) and a picture of the player's
-  own behind Home (PNG, JPEG or WebP, cropped to fill; **Landscape** brings Horizon's back). An
+  accent (crispylauncher's violet, blue, teal, green, amber, red or pink) and a picture of the player's
+  own behind Home (PNG, JPEG or WebP, cropped to fill; **Landscape** brings crispylauncher's back). An
   accent turns the violet tokens to its hue, then darkens or lightens them just enough to keep
   white on the Play button at 4.5:1 and the accent at 3:1 on every background (a test holds every
   accent in both looks to it). The picture is copied into the data folder.
@@ -155,7 +155,7 @@ The opening, then Play ([clip](docs/opening.webm)):
 - **Language**: English, French, Russian, German, Simplified Chinese, Spanish, Ukrainian and Polish.
   The window follows the system's language unless the player picks one in Settings > Launcher
   (each named in itself); a string a table lacks shows in English. The tables are
-  `launcher/lang/<code>.json`, English text to its translation, Horizon's own; a test fails when
+  `launcher/lang/<code>.json`, English text to its translation, crispylauncher's own; a test fails when
   the code asks `tr("…")` for a string a table lacks, or a table keeps one the code dropped.
   `horizon-launcher settings language system|en|fr|ru|de|zh|es|uk|pl`.
 - **Skin and cape**: each offline name's **Skin…** in Settings > Account shows the front of its
@@ -183,7 +183,7 @@ The opening, then Play ([clip](docs/opening.webm)):
   a new one on when the world opens. From the command line: `horizon-launcher worlds
   datapack-list|datapack-add|datapack-remove <world> …`. `horizon-launcher mods search --kind datapack`
   finds them on Modrinth and `mods install <pack> --world <world>` installs one, saying what of it
-  runs in Horizon.
+  runs in crispylauncher.
 - **Packs**: Home lists the selected instance's resource packs and shader packs, each with a switch.
   The choice is the game's own: `resourcePacks` in options.txt (a pack turned on goes on top, as
   the game's Resource Packs screen does) and `pickedShaderPack` in `horizon-graphics.txt` (one shader
@@ -197,7 +197,7 @@ The opening, then Play ([clip](docs/opening.webm)):
   **Delete** (to the trash, after a confirmation). From the command line:
   `horizon-launcher screenshots [list|delete] [--instance <name>]`.
 - **Java** (for the Minecraft: Java Edition instances to come): the runtime a version's JSON asks for
-  (`javaVersion`: its major exactly, Java 8 before that field), found among Mojang's runtimes Horizon
+  (`javaVersion`: its major exactly, Java 8 before that field), found among Mojang's runtimes crispylauncher
   downloaded (`minecraft/runtime/` in its data folder, the one preparing uses) and the Java homes installed
   on this computer, read from their `release` files without starting them; when none has that major,
   Mojang's runtime is downloaded; an instance may name its own Java home instead.
@@ -216,13 +216,13 @@ Windows): `versions/<tag>/`, `server-jars/`, `server/`, `settings.json`, and for
 page `servers.json` (the list), `servers/<name>/` (the servers created there) and
 `server-runtime/` (the programs and game files they run).
 
-- **Settings**: install new Horizon versions automatically (on unless you turn it off; the
+- **Settings**: install new crispylauncher versions automatically (on unless you turn it off; the
   selected version only moves to the new one if you were on the newest), the opening animation,
   what the window does while you play (stays by default; Minimise, or Hide on macOS, puts it away
   when the game starts and brings it back to the front when the game closes; `settings
   while-playing stay|minimize|hide`), the game's extra command-line arguments, an HTTP proxy for
   downloads, and the launcher's own version and update state.
-- **Updates**: Horizon ships only the Nightly (since 2026-10-28, docs/release-flow.md). The
+- **Updates**: crispylauncher ships only the Nightly (since 2026-10-28, docs/release-flow.md). The
   launcher installs the current one (the `nightly` pre-release, checksums signed for the Nightly
   channel) as `nightly-<date>-<commit>` and selects it when the player was on a Nightly, on the
   newest release or on nothing; a version picked by hand or pinned by an instance stays. Older
@@ -239,8 +239,8 @@ page `servers.json` (the list), `servers/<name>/` (the servers created there) an
   one for a single run.
 - **Proxy**: when the internet here needs one (a school's, an office's, a country where a host is
   unreachable), Settings' Proxy takes the `http://host:port` address your proxy app listens on, and
-  every download goes through it: Horizon's releases and the launcher's own update, Minecraft's
-  files and Java from Mojang, Modrinth, CurseForge, Horizon's mod registry, pictures, Microsoft
+  every download goes through it: crispylauncher's releases and the launcher's own update, Minecraft's
+  files and Java from Mojang, Modrinth, CurseForge, crispylauncher's mod registry, pictures, Microsoft
   sign-in, and the jars a modpack import fetches. It is kept as `proxy` in `settings.json`, and
   `horizon-launcher settings proxy http://127.0.0.1:7890` sets it too ("default" removes it).
   Without one, `HTTPS_PROXY` and `HTTP_PROXY` are used when the launcher is started with them, and
@@ -303,7 +303,7 @@ and don't set `%ERRORLEVEL%` / `$LASTEXITCODE`. Scripts that need the exit code 
     horizon-launcher notes [<tag>]                  patch notes as plain text
     horizon-launcher links                          the Discord, sponsor and website links
     horizon-launcher game-args [<line>]             show or set the extra arguments the game starts with
-    horizon-launcher update [--check]               Horizon and the launcher
+    horizon-launcher update [--check]               crispylauncher and the launcher
     horizon-launcher logs [--lines N] [--crash]     the end of the game's log, or its newest crash report
     horizon-launcher account [list]                 the Microsoft accounts signed in (* = plays)
     horizon-launcher account sign-in                sign in in your browser with a code
@@ -324,7 +324,7 @@ and don't set `%ERRORLEVEL%` / `$LASTEXITCODE`. Scripts that need the exit code 
     horizon-launcher packs add <file> | on|off|remove <pack> [--kind shader]
     horizon-launcher screenshots [list] [--instance <name>]   an instance's screenshots, the newest first
     horizon-launcher screenshots delete <name> [--instance <name>]   moves it to the trash
-    horizon-launcher java [list]          Java runtimes: Mojang's (downloaded by Horizon) and installed ones
+    horizon-launcher java [list]          Java runtimes: Mojang's (downloaded by crispylauncher) and installed ones
     horizon-launcher java install <21|java-runtime-delta>   downloads Mojang's runtime, each file sha1-checked
     horizon-launcher multiplayer [list] [--instance <name>]   the servers in an instance's Multiplayer list
     horizon-launcher multiplayer add <address> [--name <name>] | remove <server>
@@ -410,7 +410,7 @@ Credential Manager, or the Secret Service on Linux), never in a file, a log or t
 in until the launcher closes. When the game starts, it gets the session in a private file it
 deletes as soon as it has read it. Sign out removes the tokens.
 
-Sign-in needs Horizon's own Azure app registration: its client ID is built in from
+Sign-in needs crispylauncher's own Azure app registration: its client ID is built in from
 `HORIZON_MSA_CLIENT_ID` (and `HORIZON_MSA_CLIENT_ID` at run time overrides it; empty = not
 configured). How it works: [docs/microsoft-account.md](../docs/microsoft-account.md).
 
@@ -462,7 +462,7 @@ On Windows, `cargo test --bin horizon-launcher desktop_list_renders_the_viewport
 On NixOS, `nix-shell` in this folder provides the libraries GPUI links to (Wayland, X11,
 xkbcommon, Vulkan, fontconfig). macOS needs Xcode's command line tools. The `launcher`
 workflow builds all three platforms on every push to the `launcher` branch (or a
-`launcher-*` one), then installs the latest Horizon into a temporary folder and checks that the
+`launcher-*` one), then installs the latest crispylauncher into a temporary folder and checks that the
 client starts (`--help`) and that the binaries import only system libraries (Windows).
 
     cargo test --lib    # tag separation, version order, update selection, notes as text,

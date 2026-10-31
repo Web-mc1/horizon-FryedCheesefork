@@ -18,7 +18,7 @@ const HOSTS: [&str; 7] = [
     "https://files.minecraftforge.net/static/images/",
     "https://media.forgecdn.net/",
     "https://edge.forgecdn.net/",
-    // Horizon's registry's icons (its GitHub Pages), and the mirror kept at the address it had
+    // crispylauncher's registry's icons (its GitHub Pages), and the mirror kept at the address it had
     // before the repositories moved to the horizon-rust organization.
     "https://horizon-rust.github.io/horizon-mods/",
     "https://ludovic111.github.io/horizon-mods/",

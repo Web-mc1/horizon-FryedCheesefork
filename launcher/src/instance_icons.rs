@@ -1,6 +1,6 @@
 //! What an instance's icon shows (plan R8): its own picture (one the player chose, or its
 //! modpack's icon) first; else the block or colour chosen in its dialog; else its mark: the loader
-//! it plays with, the grass block for plain Minecraft, Horizon's own for Horizon. The letter tile
+//! it plays with, the grass block for plain Minecraft, crispylauncher's own for crispylauncher. The letter tile
 //! is the last resort. Each is decoded once per size and kept in `Instances::icons`.
 use super::*;
 use gpui::RenderImage;

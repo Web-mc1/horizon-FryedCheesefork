@@ -229,7 +229,7 @@ impl Launcher {
         }
     }
 
-    /// The modpacks installed from Horizon's registry: each plays its own profile.
+    /// The modpacks installed from crispylauncher's registry: each plays its own profile.
     fn registry_pack_rows(&self, cx: &mut Context<Self>) -> Div {
         let t = self.theme;
         let mut list = div().flex().flex_col();
@@ -281,7 +281,7 @@ impl Launcher {
                     )),
                 );
             let detail = trf(
-                "{version} from Horizon's registry, its own profile: {mods}",
+                "{version} from crispylauncher's registry, its own profile: {mods}",
                 &[("version", &p.version), ("mods", &p.mods.join(", "))],
             );
             list = list.child(index_row(
@@ -451,7 +451,7 @@ impl Launcher {
             notes.push(trf("Left off: {line}.", &[("line", line)]));
         }
         if !can_play {
-            notes.push(tr("Playing needs a prepared Horizon version (Play page).").into());
+            notes.push(tr("Playing needs a prepared crispylauncher version (Play page).").into());
         }
         let mut rows: Vec<&horizon_port_pack::report::Row> = p
             .rows

@@ -1,0 +1,10 @@
+# Paths whose local version always wins when upstream is merged (scripts/sync-upstream.sh).
+# Add a path as soon as you customise it; everything here stops taking upstream fixes,
+# so keep the list tight.
+launcher/src/theme.rs
+launcher/src/themes/
+launcher/src/titlebar.rs
+launcher/src/home.rs
+launcher/src/home_tabs.rs
+launcher/src/plate.rs
+launcher/assets/

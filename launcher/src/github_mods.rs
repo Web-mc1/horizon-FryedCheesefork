@@ -20,7 +20,7 @@ use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 
 /// What a player is told before a mod from GitHub is installed.
-pub const WARNING: &str = "Not reviewed by the Horizon registry. Native mods run with full access to this computer. Read the source first.";
+pub const WARNING: &str = "Not reviewed by the crispylauncher registry. Native mods run with full access to this computer. Read the source first.";
 
 /// The most a release asset or a mod's archive may be.
 const MAX_ASSET: u64 = 64 << 20;
@@ -467,13 +467,13 @@ fn walk_files(root: &Path, dir: &Path, out: &mut Vec<(String, PathBuf)>) -> Resu
 }
 
 /// The `.hnmod` of a mod folder, as bytes: its source (Rust, TOML and `data/`) with a manifest made
-/// from its `horizon-mixin.toml`, which must pin the Horizon commit it was made for
+/// from its `horizon-mixin.toml`, which must pin the crispylauncher commit it was made for
 /// (`[compatibility] horizon_revision`). An unpacked `.hnmod` (`horizon-native.json`) keeps the
 /// pins and hook points its manifest names. The zip is the same for the same files.
 pub fn pack(bundle: &Bundle) -> Result<Vec<u8>, String> {
     let horizon = bundle.horizon.clone().filter(|h| format::revision(h)).ok_or_else(|| {
         format!(
-            "{} has no [compatibility] horizon_revision (40 hex digits): add the Horizon commit it was made for.",
+            "{} has no [compatibility] horizon_revision (40 hex digits): add the crispylauncher commit it was made for.",
             bundle.id
         )
     })?;

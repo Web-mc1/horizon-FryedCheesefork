@@ -561,7 +561,7 @@ fn skyline(line: &Skyline, color: u32, scale: f32) -> Arc<RenderImage> {
 }
 
 /// The upper half of a sun cut by the horizon, in three bands of colour, its lower half sliced by
-/// rows of sky like Horizon's mark.
+/// rows of sky like crispylauncher's mark.
 fn sun(art: &Colors) -> Vec<[u8; 4]> {
     let (r, w) = (SUN_RADIUS as f32, SUN_RADIUS * 2);
     let mut out = vec![[0; 4]; w * SUN_RADIUS];

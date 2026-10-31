@@ -1,4 +1,4 @@
-//! New instance's kinds (docs/design-system.md, "Night"; plan R0, screen 4): Horizon, Vanilla
+//! New instance's kinds (docs/design-system.md, "Night"; plan R0, screen 4): crispylauncher, Vanilla
 //! (Minecraft: Java Edition as Mojang ships it) and Modded (with Fabric or Quilt). A Java kind picks
 //! its version from Mojang's public list (`minecraft_versions`), fetched once when the dialog first
 //! needs it; the game itself comes with the first Play, for an account that owns it.
@@ -130,13 +130,13 @@ impl Launcher {
         .detach();
     }
 
-    /// The tabs over a new instance's dialog: Horizon, Vanilla, Modded.
+    /// The tabs over a new instance's dialog: crispylauncher, Vanilla, Modded.
     pub(super) fn kind_tabs(&self, cx: &mut Context<Self>) -> Div {
         let t = self.theme;
         let now = self.instances.dialog.as_ref().map(|d| d.java.kind);
         div().flex().gap(px(4.)).children(
             [
-                (NewKind::Horizon, "Horizon"),
+                (NewKind::Horizon, "crispylauncher"),
                 (NewKind::Vanilla, "Vanilla"),
                 (NewKind::Modded, "Modded"),
             ]

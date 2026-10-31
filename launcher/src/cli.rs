@@ -17,7 +17,7 @@ use std::process::Command;
 #[command(
     name = "horizon-launcher",
     version = backend::VERSION,
-    about = "Installs, prepares and starts Horizon. Without a subcommand, opens the window."
+    about = "Installs, prepares and starts crispylauncher. Without a subcommand, opens the window."
 )]
 struct Cli {
     /// Print JSON instead of text, where a command has something to report
@@ -29,7 +29,7 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum JavaCmd {
-    /// The Java runtimes Horizon downloaded from Mojang and the ones installed on this computer
+    /// The Java runtimes crispylauncher downloaded from Mojang and the ones installed on this computer
     List,
     /// Download Mojang's Java runtime: a major (8, 16, 17, 21, 25) or a component name from a
     /// version's JSON (java-runtime-delta)
@@ -219,7 +219,7 @@ enum InstanceCmd {
         #[arg(long)]
         copy: Option<String>,
         /// Make a Minecraft: Java Edition instance of this version (1.21.4, latest or
-        /// latest-snapshot) instead of a Horizon one
+        /// latest-snapshot) instead of a crispylauncher one
         #[arg(long, conflicts_with = "copy")]
         minecraft: Option<String>,
         /// With this mod loader: fabric or quilt
@@ -271,7 +271,7 @@ enum InstanceCmd {
     /// Rename an instance (its folder stays)
     Rename { instance: String, name: String },
     /// Delete an instance: its folder (worlds, options, packs) goes to the Trash, where you can
-    /// get it back. Horizon's own instance stays
+    /// get it back. crispylauncher's own instance stays
     Delete { instance: String },
     /// Set an instance's icon: a block or item name from your prepared files (grass_block),
     /// a colour (#3fa7d6), or none
@@ -283,9 +283,9 @@ enum InstanceCmd {
     },
     /// Make Play start this instance
     Select { instance: String },
-    /// Keep an instance on one installed Horizon version, or "latest" to follow updates again
+    /// Keep an instance on one installed crispylauncher version, or "latest" to follow updates again
     Version { instance: String, version: String },
-    /// Export an instance (or a port) to share: its settings, packs, Horizon mods and the worlds
+    /// Export an instance (or a port) to share: its settings, packs, crispylauncher mods and the worlds
     /// named, as a .mrpack (resource packs from Modrinth listed by download) or a zip. Never
     /// logs, screenshots or account data; worlds go without their per-player files
     Export {
@@ -538,7 +538,7 @@ enum ModsCmd {
         #[arg(long)]
         instance: Option<String>,
     },
-    /// Search for packs Horizon loads, or for what a Java instance runs (made for its
+    /// Search for packs crispylauncher loads, or for what a Java instance runs (made for its
     /// Minecraft version and loader)
     Search {
         text: Vec<String>,
@@ -553,7 +553,7 @@ enum ModsCmd {
         #[arg(long)]
         instance: Option<String>,
     },
-    /// Say how well a Java mod runs in Horizon: its jar is downloaded (checksum checked),
+    /// Say how well a Java mod runs in crispylauncher: its jar is downloaded (checksum checked),
     /// carried over and read; the answer is kept
     Check {
         project: String,
@@ -594,7 +594,7 @@ enum ModsCmd {
     /// Install a native mod from a GitHub link (docs/native-mods.md, "Install from GitHub"):
     /// https://github.com/OWNER/REPO (its latest release, else its default branch),
     /// .../releases/tag/TAG, .../tree/REF or .../commit/SHA. Resolved to an exact release file or
-    /// commit, checked like a registry mod. NOT reviewed by the Horizon registry
+    /// commit, checked like a registry mod. NOT reviewed by the crispylauncher registry
     AddGithub {
         url: String,
         /// The mod to install when the link holds several
@@ -655,7 +655,7 @@ enum KindArg {
     Mod,
     Resource,
     Modpack,
-    /// Horizon's own shader packs (Horizon's registry only)
+    /// crispylauncher's own shader packs (crispylauncher's registry only)
     Shader,
     /// Data packs (Modrinth): install one into a world with `mods install <pack> --world <name>`
     Datapack,
@@ -666,7 +666,7 @@ enum SourceArg {
     Modrinth,
     /// CurseForge support is coming soon
     Curseforge,
-    /// Horizon's own registry: mods, modpacks and resource packs made for Horizon, reviewed
+    /// crispylauncher's own registry: mods, modpacks and resource packs made for crispylauncher, reviewed
     Horizon,
 }
 
@@ -684,7 +684,7 @@ impl SourceArg {
 
 #[derive(Subcommand)]
 enum Cmd {
-    /// List Horizon releases, or the installed versions
+    /// List crispylauncher releases, or the installed versions
     Versions {
         /// Only the versions installed here (no network)
         #[arg(long)]
@@ -744,7 +744,7 @@ enum Cmd {
         #[arg(long)]
         accept_eula: bool,
     },
-    /// Native mods (experimental, docs/native-mods.md): compile mixin bundles on the Horizon
+    /// Native mods (experimental, docs/native-mods.md): compile mixin bundles on the crispylauncher
     /// revision they pin, with the launcher's own Rust, as the version the "Native mods" instance
     /// plays. Not sandboxed: the mods' code runs with your rights
     NativeBuild {
@@ -762,7 +762,7 @@ enum Cmd {
         /// You read the mods' source and trust it with full access to this computer
         #[arg(long)]
         trust_native_code: bool,
-        /// Build mods made for different Horizon versions together anyway, on the newest of them
+        /// Build mods made for different crispylauncher versions together anyway, on the newest of them
         #[arg(long)]
         allow_version_mismatch: bool,
     },
@@ -783,7 +783,7 @@ enum Cmd {
     /// ("default" removes it), while-playing stay|minimize|hide (what the window does while the game runs), language
     /// system|en|fr|ru|de|zh|es|uk|pl (the window's language; system follows the computer's), accent
     /// violet|blue|teal|green|amber|red|pink, background PATH (a picture behind Home; "default"
-    /// shows Horizon's landscape)
+    /// shows crispylauncher's landscape)
     Settings {
         #[arg(value_parser = SETTING_KEYS)]
         key: Option<String>,
@@ -818,13 +818,13 @@ enum Cmd {
         #[arg(long)]
         crash: bool,
     },
-    /// Look for a newer Horizon release and launcher, and install them
+    /// Look for a newer crispylauncher release and launcher, and install them
     Update {
         /// Only report what is available
         #[arg(long)]
         check: bool,
     },
-    /// Linux: put Horizon in the applications menu (an entry and the icon, under
+    /// Linux: put crispylauncher in the applications menu (an entry and the icon, under
     /// $XDG_DATA_HOME), or take it out with --remove
     DesktopEntry {
         /// Remove the entry and the icon, and stop adding them back
@@ -1503,10 +1503,10 @@ fn execute(command: Cmd, as_json: bool) -> Result<(), String> {
             settings.save();
             if remove {
                 horizon_launcher::desktop::remove()?;
-                println!("Removed Horizon from the applications menu.");
+                println!("Removed crispylauncher from the applications menu.");
             } else {
                 horizon_launcher::desktop::install(backend::exe_path())?;
-                println!("Horizon is in the applications menu.");
+                println!("crispylauncher is in the applications menu.");
             }
         }
         Cmd::Worlds { action } => worlds(
@@ -1548,11 +1548,11 @@ fn java(action: JavaCmd, as_json: bool) -> Result<(), String> {
             if as_json {
                 json(serde_json::json!(all));
             } else if all.is_empty() {
-                println!("No Java yet. Horizon downloads Mojang's when an instance needs it.");
+                println!("No Java yet. crispylauncher downloads Mojang's when an instance needs it.");
             } else {
                 for r in &all {
                     let from = match r.source {
-                        java::Source::Mojang => "Mojang's, downloaded by Horizon",
+                        java::Source::Mojang => "Mojang's, downloaded by crispylauncher",
                         java::Source::Installed => "installed",
                     };
                     println!("Java {}  ({from})\n  {}", r.version, r.home.display());
@@ -1635,12 +1635,12 @@ fn update(check: bool, as_json: bool) -> Result<(), String> {
         return Ok(());
     }
     match &updates.horizon {
-        None => println!("Horizon: up to date."),
-        Some(r) if check => println!("Horizon: {} is available.", r.tag),
+        None => println!("crispylauncher: up to date."),
+        Some(r) if check => println!("crispylauncher: {} is available.", r.tag),
         Some(r) => {
             let tag =
                 backend::install_tag(&r.tag, true, progress(format!("Installing {}", r.tag)))?;
-            println!("Horizon: installed {tag}.");
+            println!("crispylauncher: installed {tag}.");
         }
     }
     match &updates.launcher {
@@ -1986,7 +1986,7 @@ fn servers(action: ServersCmd, as_json: bool) -> Result<(), String> {
             let tag = backend::resolve_version(version.as_deref())?;
             servers::set_up(&tag)?;
             println!(
-                "Servers run Horizon {}",
+                "Servers run crispylauncher {}",
                 servers::runtime_release().unwrap_or(tag)
             );
         }
@@ -2024,7 +2024,7 @@ fn github_native(
     trust: bool,
 ) -> Result<(), String> {
     if java {
-        return Err("Native mods from GitHub are for Horizon instances.".into());
+        return Err("Native mods from GitHub are for crispylauncher instances.".into());
     }
     println!("{}", found.label());
     println!("Source, to read: {}", found.source_url());
@@ -2437,7 +2437,7 @@ fn mods(action: ModsCmd, as_json: bool) -> Result<(), String> {
             ..
         } => {
             if java.is_some() {
-                return Err("Native mods from GitHub are for Horizon instances.".into());
+                return Err("Native mods from GitHub are for crispylauncher instances.".into());
             }
             let mut origins = github_mods::origins(&home);
             origins.retain(|o| id.as_deref().is_none_or(|i| o.id == i));
@@ -2667,7 +2667,7 @@ fn instance(action: InstanceCmd, as_json: bool) -> Result<(), String> {
         } => {
             let Some(java) = instances::find(&instance)?.java else {
                 return Err(format!(
-                    "{instance} is a Horizon instance: mod loaders are for Java instances."
+                    "{instance} is a crispylauncher instance: mod loaders are for Java instances."
                 ));
             };
             if list {
@@ -2713,7 +2713,7 @@ fn instance(action: InstanceCmd, as_json: bool) -> Result<(), String> {
             let window = window.as_deref().map(parse_window).transpose()?;
             if instances::find(&instance)?.java.is_none() {
                 return Err(format!(
-                    "{instance} is a Horizon instance: Horizon is not a Java program."
+                    "{instance} is a crispylauncher instance: crispylauncher is not a Java program."
                 ));
             }
             changed(instances::edit(&instance, |m| {
@@ -3361,7 +3361,7 @@ fn modpack(action: ModpackCmd, as_json: bool) -> Result<(), String> {
                     );
                 } else {
                     println!(
-                        "{} {}  ({}, from Horizon's registry)\n  {}",
+                        "{} {}  ({}, from crispylauncher's registry)\n  {}",
                         p.name,
                         p.version,
                         p.id,

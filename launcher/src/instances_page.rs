@@ -37,7 +37,7 @@ const TEXTURES: [&str; 24] = [
     "book",
 ];
 
-/// Colours offered as icons: Horizon's accent and a few that sit beside it in both themes.
+/// Colours offered as icons: crispylauncher's accent and a few that sit beside it in both themes.
 const COLOURS: [&str; 8] = [
     "#5b3fd6", "#3f7fd6", "#2f9e8f", "#4f9e2f", "#c9a227", "#d9732f", "#c4405a", "#7d7591",
 ];
@@ -53,7 +53,7 @@ pub(super) struct InstanceDialog {
     pub(super) picture: Option<Option<instance_icons::Chosen>>,
     pub(super) error: Option<String>,
     busy: bool,
-    /// Horizon, or the Java game it plays.
+    /// crispylauncher, or the Java game it plays.
     pub(super) java: new_instance::JavaChoice,
 }
 
@@ -218,9 +218,9 @@ impl Launcher {
                         summary.map_or_else(|| tr("Modpack").into(), |p| p.summary()),
                     )
                 }
-                InstanceKind::Pack => (false, tr("From Horizon's registry").into()),
+                InstanceKind::Pack => (false, tr("From crispylauncher's registry").into()),
             };
-            // Java instances have nothing of Horizon's to prepare: no state square.
+            // Java instances have nothing of crispylauncher's to prepare: no state square.
             let state = (matches!(i.kind, InstanceKind::Default | InstanceKind::Own)
                 && i.java.is_none())
             .then_some(if prepared { t.success } else { t.warn });
@@ -389,7 +389,7 @@ impl Launcher {
         let n = t.night;
         let from = self
             .selected_instance()
-            .map_or_else(|| "Horizon".into(), |i| i.name.clone());
+            .map_or_else(|| "crispylauncher".into(), |i| i.name.clone());
         let row = |label: &'static str, control: AnyElement| {
             div()
                 .flex()
@@ -490,7 +490,7 @@ impl Launcher {
                     .into_any_element(),
             );
         }
-        // Nothing chosen: the instance's mark (its loader's, Horizon's), when it has one.
+        // Nothing chosen: the instance's mark (its loader's, crispylauncher's), when it has one.
         let mark = instance.as_ref().and_then(|i| self.instance_mark(i, 28.));
         tiles.push(
             tile("instance-icon-none".into(), icon.is_none() && !pictured)
@@ -768,7 +768,7 @@ impl Launcher {
 }
 
 impl Launcher {
-    /// Delete…, for every instance but Horizon's own (the game's home); not while a game runs.
+    /// Delete…, for every instance but crispylauncher's own (the game's home); not while a game runs.
     fn delete_button(&self, instance: &Instance, cx: &mut Context<Self>) -> Option<Stateful<Div>> {
         if instance.kind == InstanceKind::Default {
             return None;
@@ -837,7 +837,7 @@ impl Launcher {
         match instances::delete(id) {
             Ok(_) => {
                 self.instances.confirm_delete = None;
-                // Play starts Horizon again; the window's copy of the settings says so too.
+                // Play starts crispylauncher again; the window's copy of the settings says so too.
                 if self.settings.instance.as_deref() == Some(id) {
                     self.settings.instance = None;
                     self.settings.save();

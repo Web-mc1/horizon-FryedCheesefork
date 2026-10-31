@@ -10,8 +10,8 @@ use std::fs;
 use std::path::Path;
 
 const FILE: &str = "servers.dat";
-/// Horizon's official survival server, named and placed as the game lists it.
-pub const OFFICIAL: (&str, &str) = ("Horizon Official", "horizon.bunchy7s.dev");
+/// crispylauncher's official survival server, named and placed as the game lists it.
+pub const OFFICIAL: (&str, &str) = ("crispylauncher Official", "horizon.bunchy7s.dev");
 /// Beside servers.dat once the official server was offered, so a player who removes it never
 /// gets it back. The game writes the same file.
 const OFFICIAL_MARKER: &str = "horizon_official_server.txt";

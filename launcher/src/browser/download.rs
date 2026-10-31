@@ -7,7 +7,7 @@ use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 
 /// Hosts a file may come from: Modrinth's and CurseForge's file servers, and the release assets
-/// of Horizon's registry (and, see [`github_release_asset`], of the repository a registry entry
+/// of crispylauncher's registry (and, see [`github_release_asset`], of the repository a registry entry
 /// names).
 const HOSTS: [&str; 5] = [
     "https://cdn.modrinth.com/",
@@ -66,7 +66,7 @@ pub(super) fn agent(url: &str) -> ureq::Agent {
 pub fn refuse(file: &FileRef) -> Option<String> {
     if !HOSTS.iter().any(|h| file.url.starts_with(h)) && !github_release_asset(&file.url) {
         return Some(format!(
-            "{} isn't on Modrinth's, CurseForge's or Horizon's file servers, or a GitHub release.",
+            "{} isn't on Modrinth's, CurseForge's or crispylauncher's file servers, or a GitHub release.",
             file.url
         ));
     }

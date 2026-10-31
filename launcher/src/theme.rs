@@ -1,6 +1,6 @@
-//! The launcher's view of Horizon's design tokens (`crates/horizon-theme`, described in
+//! The launcher's view of crispylauncher's design tokens (`crates/horizon-theme`, described in
 //! `docs/design-system.md`): the night look (`horizon_theme::night`, a night sky or a dawn with
-//! Horizon's violet) in Bricolage Grotesque, with Geist Mono for paths and codes (all bundled, SIL
+//! crispylauncher's violet) in Bricolage Grotesque, with Geist Mono for paths and codes (all bundled, SIL
 //! Open Font License). Screens not rebuilt yet draw the Blocks parts in the night's colours.
 use gpui::{rgb, Hsla, WindowAppearance};
 use horizon_launcher::backend::Appearance;
