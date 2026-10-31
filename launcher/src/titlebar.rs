@@ -7,9 +7,12 @@ use horizon_launcher::backend::Appearance;
 /// Whether Windows uses a transparent native title bar for the launcher's custom chrome.
 pub const DRAWN: bool = cfg!(target_os = "windows");
 
+/// The window's name, as the drawn title bar, the platform's title and the window list show it.
+pub const TITLE: &str = "Crispy Launcher";
+
 pub fn options() -> TitlebarOptions {
     TitlebarOptions {
-        title: Some("Crispy Launcher".into()),
+        title: Some(TITLE.into()),
         appears_transparent: DRAWN,
         ..Default::default()
     }
@@ -41,7 +44,7 @@ pub fn render(theme: &Theme, window: &Window) -> Option<Div> {
         .px(px(12.))
         .on_mouse_down(MouseButton::Left, |_, window, _| window.start_window_move())
         .child(mark(16., theme))
-        .child(blocks::pixel(13., FontWeight::MEDIUM).child("Crispy Launcher"));
+        .child(blocks::pixel(13., FontWeight::MEDIUM).child(TITLE));
 
     let mut bar = div()
         .flex()
@@ -381,7 +384,7 @@ mod windows {
             .px(px(12.))
             .window_control_area(WindowControlArea::Drag)
             .child(mark(16., theme))
-            .child(blocks::pixel(13., FontWeight::MEDIUM).child("Crispy Launcher"));
+            .child(blocks::pixel(13., FontWeight::MEDIUM).child(TITLE));
         Some(
             div()
                 .flex()

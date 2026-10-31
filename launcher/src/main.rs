@@ -338,6 +338,9 @@ struct Launcher {
 
 impl Launcher {
     fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
+        // The window's own name, for the task bar and the window list: the drawn title bar
+        // carries it too, but the platform's title is what "Launcher" is looked up by.
+        window.set_window_title(titlebar::TITLE);
         let (tx, rx) = channel();
         let appearance = cx.observe_window_appearance(window, |this, window, cx| {
             this.theme = this.settings_theme(window);
@@ -2222,7 +2225,7 @@ impl Launcher {
                 shell::text(night::TITLE, shell::c(n.accent))
                     .font_family(theme::DISPLAY_FONT)
                     .font_weight(FontWeight::BOLD)
-                    .child("Crispy Launcher"),
+                    .child(titlebar::TITLE),
             );
         // The foot: the launcher's own actions, stacked full width, then who plays.
         let mut foot = div().flex().flex_col().gap(px(6.));
@@ -4304,18 +4307,20 @@ impl Render for Launcher {
             let word = div()
                 .flex()
                 .font_family(theme::PIXEL)
-                .text_size(px(theme::WORDMARK.px * 0.5))
-                .line_height(px(theme::WORDMARK.px * 0.5))
+                .text_size(px(theme::WORDMARK.px * 0.4))
+                .line_height(px(theme::WORDMARK.px * 0.4))
                 .font_weight(FontWeight::BOLD)
                 .text_color(t.ink)
-                .children("HORIZON".chars().enumerate().map(|(i, c)| {
-                    let at = held - i as f32 * theme::STAGGER.as_secs_f32() * 1.5;
+                .children("CRISPY LAUNCHER".chars().enumerate().map(|(i, c)| {
+                    // The word is twice as long as upstream's was: each letter arrives sooner, so
+                    // it is all in before the launcher takes over.
+                    let at = held - i as f32 * theme::STAGGER.as_secs_f32() * 0.7;
                     let p = ease_out_cubic(at / theme::ENTER.as_secs_f32());
                     div()
                         .relative()
                         .opacity(p)
                         .top(px(theme::RISE * 2. * (1. - p)))
-                        .child(c.to_string())
+                        .child(if c == ' ' { "\u{00a0}".to_string() } else { c.to_string() })
                 }));
             root = root.child(
                 div()
@@ -4333,8 +4338,13 @@ impl Render for Launcher {
                     .child(
                         div()
                             .relative()
+                            .flex()
+                            .flex_col()
+                            .items_center()
+                            .gap(px(20.))
                             .top(px(-24. * (1. - gone)))
                             .opacity(gone)
+                            .child(mark(theme::WORDMARK.px * 0.34, &t))
                             .child(word),
                     )
                     .when(reveal == 0., |d| {

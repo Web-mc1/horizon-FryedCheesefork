@@ -82,7 +82,7 @@ pub fn launcher_entry(exe: &Path) -> String {
     format!(
         "[Desktop Entry]\n\
          Type=Application\n\
-         Name=crispylauncher\n\
+         Name=Crispy Launcher\n\
          GenericName=Game launcher\n\
          Comment=Install, prepare and play crispylauncher, Minecraft: Java Edition {minecraft} rewritten in Rust\n\
          Exec={}\n\
