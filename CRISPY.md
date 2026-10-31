@@ -44,6 +44,30 @@ Two different updates used to exist, and only one of them is left:
 
 You update the launcher by pulling upstream yourself with `scripts/sync-upstream.sh`.
 
+## The game's own text
+
+The launcher is only half of what the player reads. The game's menus ("Horizon Settings...",
+the version label in the title screen's corner, the window title) come from the client build the
+launcher installed, not from this repo's source.
+
+`scripts/rebrand-game.sh` rewrites what the game shows: the lang values in
+`crates/horizon-client/assets/horizon/lang/*.json`, the version label, and the window title.
+Diagnostics keep the old spelling, because they name the upstream project in reports and some are
+compared verbatim by tests.
+
+To play it, build the client and put it where the launcher looks:
+
+```bash
+cargo build --release -p horizon-client
+v=~/.local/share/horizon-launcher/versions/<version>
+cp -n "$v/horizon-client" "$v/horizon-client.upstream"   # once, keep the original
+cp target/release/horizon-client "$v/horizon-client"
+```
+
+A version the launcher re-installs, or another instance's build (`native-<tag>`), gets the
+upstream binary again — repeat the copy for those. The upstream copy stays beside it as
+`horizon-client.upstream`.
+
 ## Keeping your UI
 
 ```bash
