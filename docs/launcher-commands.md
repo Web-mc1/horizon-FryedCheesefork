@@ -4,6 +4,16 @@
 
 Every command of `horizon-launcher`, and the tool `horizon-launcher mcp` offers for it. A tool's arguments are the command's, in snake_case. A tool runs the command with `--json` and returns what it printed. The tools that change the player's things for good need `confirm: true`. The tools that send something or reach other people say "only when the player asks". The game's own tools, `game_*`, are in [horizon-ctl-commands.md](horizon-ctl-commands.md). With No AI on, `mcp` and `agent-config` are hidden and refuse; every other command stays. See [agent-control.md](agent-control.md#no-ai).
 
+## `horizon-launcher completions`
+
+Write a shell completion script to stdout.
+
+    horizon-launcher completions <SHELL>
+
+- `SHELL` (bash, elvish, fish, powershell, zsh)
+
+MCP: none: the player's switch.
+
 ## `horizon-launcher versions`
 
 List crispylauncher releases, or the installed versions.
@@ -78,9 +88,11 @@ Native mods (experimental, docs/native-mods.md): compile mixin bundles on the cr
     horizon-launcher native-build [FOLDER]
 
 - `FOLDER`: A mod folder (horizon-mixin.toml, or an unpacked .hnmod), or a folder of them (default: the native mods installed and turned on in the instance)
-- `--instance`: The instance whose installed native mods to build, and which then plays the build (default: the selected one; the game's own home builds into the Native mods instance)
+- `--instance`: The instance whose installed native mods to build, and which then plays the build (default: the selected one)
+- `--update`: Move to the newest installed release or Nightly instead of the crispylauncher the instance plays (a full rebuild)
 - `--trust-native-code`: You read the mods' source and trust it with full access to this computer
 - `--allow-version-mismatch`: Build mods made for different crispylauncher versions together anyway, on the newest of them
+- `--profile` (fast, release): The Cargo profile: fast (the default: incremental, quick to rebuild) or release (thin LTO: slower to build, slightly faster game). Default: the native-profile setting
 
 MCP: none: the player's switch.
 
@@ -179,7 +191,7 @@ Show the launcher's settings, or set one (the Settings page): selected-version T
 
     horizon-launcher settings [KEY] [VALUE]
 
-- `KEY` (selected-version, minecraft-dir, server-dir, install-new-versions, prune-old-versions, keep-versions, opening-animation, proxy, while-playing, language, accent, background)
+- `KEY` (selected-version, minecraft-dir, server-dir, install-new-versions, prune-old-versions, keep-versions, opening-animation, proxy, while-playing, language, accent, background, native-profile)
 - `VALUE`: The new value (with KEY)
 
 MCP: `settings`.

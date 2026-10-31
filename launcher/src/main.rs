@@ -66,6 +66,7 @@ use horizon_launcher::backend::{self, Job, Msg, Release, Running, Settings, Upda
 use horizon_launcher::i18n::{self, tr, trf};
 use horizon_launcher::instances;
 use horizon_launcher::native_mods;
+use horizon_launcher::native_status;
 use horizon_launcher::telemetry;
 use scrollbar::Scrollbar;
 use std::borrow::Cow;
@@ -193,13 +194,32 @@ struct Launcher {
     /// Native mods (`native_mods`): the build's step while it runs, why it failed, and the
     /// warning before a build while it is open, with the mods it names.
     native_step: Option<String>,
+    /// When the running native build started, and the whole seconds last drawn (the status shows
+    /// the time it has taken).
+    native_started: Option<(Instant, u64)>,
+    /// How the last native build ended ("Built in 42 s (fast, incremental)", or "Up to date").
+    native_done: Option<String>,
     native_error: Option<String>,
     native_confirm: Option<Result<Vec<native_mods::Bundle>, String>>,
+    /// The instance (id) the build under way, or the last one's error, is for.
+    native_for: Option<String>,
+    /// The newer crispylauncher the open warning's build moves to (Update), else None: a build stays
+    /// on the crispylauncher the instance plays.
+    native_update: Option<String>,
+    /// What each installed native build was made from, by version. A build's version names its
+    /// contents, so an entry never goes stale.
+    native_builds:
+        std::cell::RefCell<std::collections::HashMap<String, Option<native_status::Build>>>,
     /// The mods of a build made for other crispylauncher versions (`native_mods::MISMATCH`): the build
     /// waits for "Build anyway".
     native_mismatch: Option<String>,
     confirm_remove: Option<String>,
     picker_open: bool,
+    /// Where the accent picker's hue strip is on screen (`themes_page.rs`), to map a click to a
+    /// hue.
+    hue_area: std::rc::Rc<std::cell::Cell<Option<Bounds<Pixels>>>>,
+    /// A drag on that strip is in flight, so a release anywhere writes the accent down.
+    hue_dragging: bool,
     /// Settings > Language's dropdown (`language_page.rs`).
     language_menu: bool,
     /// The top bar's quick switch of who plays (`switch_page.rs`).
@@ -443,11 +463,18 @@ impl Launcher {
             disk_for: Vec::new(),
             install_error: None,
             native_step: None,
+            native_started: None,
+            native_done: None,
             native_error: None,
             native_confirm: None,
+            native_for: None,
+            native_update: None,
+            native_builds: Default::default(),
             native_mismatch: None,
             confirm_remove: None,
             picker_open: false,
+            hue_area: std::rc::Rc::new(std::cell::Cell::new(None)),
+            hue_dragging: false,
             language_menu: false,
             account_menu: false,
             menu_closed_at: None,
@@ -679,8 +706,21 @@ impl Launcher {
         Ok((folder, found))
     }
 
+    /// What installed native build `version` was made from (`native_status::Build`), read once.
+    fn native_build_of(&self, version: &str) -> Option<native_status::Build> {
+        if !native_mods::is_native(version) {
+            return None;
+        }
+        self.native_builds
+            .borrow_mut()
+            .entry(version.to_owned())
+            .or_insert_with(|| native_status::Build::read(version))
+            .clone()
+    }
+
     /// Builds the selected instance's native mods, once the player accepted the warning. The
-    /// build reuses the game files of the version the instance plays, else the newest installed.
+    /// build stays on the crispylauncher the instance plays (`native_mods::base_for`), unless the
+    /// warning was Update's: then it moves to that newer crispylauncher.
     /// `anyway`: the player agreed to build mods made for other crispylauncher versions together.
     fn build_native(&mut self, anyway: bool) {
         if self.native_step.is_some() {
@@ -690,16 +730,12 @@ impl Launcher {
         self.native_error = None;
         self.native_mismatch = None;
         let instance = instances::selected();
-        let base = instance
-            .version
-            .clone()
-            .filter(|v| !native_mods::is_native(v))
-            .or_else(|| {
-                self.installed
-                    .iter()
-                    .find(|t| backend::is_game_tag(t) || t.starts_with("nightly-"))
-                    .cloned()
-            });
+        self.native_for = Some(instance.id.clone());
+        let plays = instance.version.clone();
+        let base = match self.native_update.take() {
+            Some(newer) => Some(newer),
+            None => native_mods::base_for(plays.as_deref(), &self.installed, false),
+        };
         let Some(base) = base else {
             self.native_error = Some(tr("Install crispylauncher first.").into());
             return;
@@ -712,9 +748,12 @@ impl Launcher {
             }
         };
         self.native_step = Some(tr("Starting the build").into());
+        self.native_started = Some((Instant::now(), 0));
+        self.native_done = None;
+        let profile = native_mods::Profile::from_setting(self.settings.native_release);
         let tx = self.tx.clone();
         std::thread::spawn(move || {
-            let result = native_mods::build(&base, &folder, Some(&instance), anyway, |step| {
+            let result = native_mods::build(&base, &folder, &instance, anyway, profile, |step| {
                 let _ = tx.send(Msg::NativeProgress(step.label()));
             });
             let _ = tx.send(Msg::Native(result));
@@ -952,9 +991,15 @@ impl Launcher {
                     }
                 }
                 Msg::Updates(Err(e)) => self.update_error = Some(e),
+                // The official server's live count: this fork's multiplayer page does not show it.
+                Msg::OfficialPlayers(_) => {}
                 Msg::NativeProgress(step) => self.native_step = Some(step),
                 Msg::Native(result) => {
-                    self.native_step = None;
+                    // The last step of a build that worked says how it went.
+                    let last = self.native_step.take();
+                    self.native_started = None;
+                    self.native_done = result.is_ok().then_some(last).flatten();
+                    self.native_builds.borrow_mut().clear();
                     self.installed = backend::installed();
                     self.reload_instances();
                     match result.map_err(|e| match e.strip_prefix(native_mods::MISMATCH) {
@@ -3283,7 +3328,6 @@ impl Launcher {
                     .child(self.proxy_row(n + 4, cx))
                     .child(group("Game", "gamepad"))
                     .child(self.game_args_row(n + 5, cx))
-                    .child(self.native_mods_row(n + 5, cx))
                     .child(group("AI", "terminal"))
                     .child(self.no_ai_row(n + 6, cx))
                     .child(group("About", "info-box"))
@@ -3373,62 +3417,6 @@ impl Launcher {
                 .child(notice(e, &t)),
             None => row,
         }
-    }
-
-    /// Settings' Game arguments row: the extra arguments the game starts with, kept in
-    /// `settings.json` and appended to the launcher's own (quotes group a word with spaces).
-    /// Settings' Native mods row (docs/native-mods.md): off by default. On, Build compiles the
-    /// native mods installed in the instance Play starts, after a warning that names them, and
-    /// that instance then plays the build.
-    fn native_mods_row(&self, n: usize, cx: &mut Context<Self>) -> Div {
-        let t = self.theme;
-        let on = self.settings.native_mods;
-        let toggle =
-            switch("native-mods", on, &t).on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
-                this.settings.native_mods = !this.settings.native_mods;
-                this.native_confirm = None;
-                this.native_mismatch = None;
-                this.settings.save();
-                cx.notify();
-            }));
-        let mut detail = div().flex().flex_col().gap(px(4.)).child(
-            tr("Native mods from the Mods page compile into the game with the launcher's own Rust. Not sandboxed: they can do anything you can on this computer.").to_string(),
-        );
-        if on {
-            let status = match (&self.native_step, &self.native_error) {
-                (Some(step), _) => Some(div().child(step.clone())),
-                (None, Some(e)) => Some(div().text_color(t.danger).child(e.clone())),
-                (None, None) => instances::selected()
-                    .version
-                    .filter(|v| native_mods::is_native(v))
-                    .map(|v| {
-                        div().child(trf("{version} plays in this instance.", &[("version", &v)]))
-                    }),
-            };
-            detail = detail.children(status);
-            if let (None, Some(list)) = (&self.native_step, &self.native_mismatch) {
-                detail = detail.child(self.native_mismatch_panel(list, cx));
-            } else if self.native_step.is_none() && self.native_confirm.is_none() {
-                detail = detail.child(div().flex().gap(px(8.)).mt(px(4.)).child(
-                    button("native-build", "Build", Kind::Primary, &t).on_click(cx.listener(
-                        |this, _: &ClickEvent, _, cx| {
-                            this.native_confirm = Some(this.native_mods_to_build().map(|(_, b)| b));
-                            cx.notify();
-                        },
-                    )),
-                ));
-            }
-            if let Some(mods) = &self.native_confirm {
-                detail = detail.child(self.native_warning(mods, cx));
-            }
-        }
-        index_row(
-            n,
-            tr("Native mods (experimental)"),
-            Some(detail.into_any_element()),
-            Some(toggle.into_any_element()),
-            &t,
-        )
     }
 
     /// The warning before a native build: what the mods can do and which mods. The build starts
@@ -3521,6 +3509,8 @@ impl Launcher {
             )
     }
 
+    /// Settings' Game arguments row: the extra arguments the game starts with, kept in
+    /// `settings.json` and appended to the launcher's own (quotes group a word with spaces).
     fn game_args_row(&self, n: usize, cx: &mut Context<Self>) -> Div {
         let t = self.theme;
         let focused = self.args_focused;

@@ -51,6 +51,9 @@ if [ -n "$(git status --porcelain)" ]; then
 fi
 
 start=$(git rev-parse HEAD)
+# Where this fork last stood with upstream: a file whose only change since then was the brand
+# is one nobody here edited.
+base=$(git merge-base "$start" "$target")
 say "Merging $target ($(git rev-list --count "HEAD..$target") upstream commits)."
 
 # --no-commit keeps HEAD at $start while the merge sits in the index, so the protected paths
@@ -88,6 +91,52 @@ while IFS= read -r path; do
     kept=$((kept + 1))
 done < crispy-ui.txt
 say "Kept $kept protected path(s) exactly as they were."
+
+work=$(mktemp -d)
+trap 'rm -rf "$work"' EXIT
+temp=0
+
+# Is $1 one of the paths crisp-ui.txt protects?
+protected() {
+    local path=$1 p
+    while IFS= read -r p; do
+        case "$p" in ''|'#'*) continue ;; esac
+        case "$path" in "$p" | "$p"/*) return 0 ;; esac
+    done < crispy-ui.txt
+    return 1
+}
+
+# Did this fork only apply the brand to $1 since the merge base? Rebranding the base's copy has
+# to give this fork's copy byte for byte; anything else means a person edited it too.
+only_rebranded() {
+    local path=$1 copy theirs
+    git cat-file -e "$base:$path" 2>/dev/null || return 1
+    temp=$((temp + 1))
+    copy="$work/$temp.${path##*.}"
+    theirs="$work/o$temp.${path##*.}"
+    git show "$base:$path" >"$copy"
+    git show "$start:$path" >"$theirs"
+    perl scripts/rebrand.pl "$copy" >/dev/null 2>&1 || return 1
+    cmp -s "$copy" "$theirs"
+}
+
+# `-X ours` settles each hunk both sides changed, and the brand changes nearly every string, so
+# upstream's restructuring lands beside this fork's older copy of the same code: a half-renamed
+# enum, a function moved out from under its caller. Neither side compiles that. Such a file has
+# nothing of ours to lose, so upstream's version replaces it whole and the rebrand below puts
+# the name back — which is what keeps a nightly that reshuffles the launcher from needing work
+# by hand every morning.
+taken=0
+while IFS= read -r path; do
+    [ -n "$path" ] || continue
+    git cat-file -e "$target:$path" 2>/dev/null || continue
+    [ -f "$path" ] || continue
+    protected "$path" && continue
+    only_rebranded "$path" || continue
+    git checkout "$target" -- "$path"
+    taken=$((taken + 1))
+done <<<"$(git diff --name-only "$base" "$target" -- launcher/src)"
+say "Took upstream's version of $taken file(s) this fork had only rebranded."
 
 ./scripts/rebrand.sh
 ./scripts/rebrand-game.sh

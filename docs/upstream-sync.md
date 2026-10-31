@@ -15,10 +15,17 @@ script does it, and a workflow runs that script every night.
    files, because they are a design rather than a patch: the launcher's layout, the mark it
    draws, its palette, the game's settings menu with the AI Agent page removed, the icon set.
    Upstream never wins those.
-3. **Re-applies the brand**: `scripts/rebrand.sh` (launcher strings, `launcher/lang/`) and
+3. **Takes upstream's version of the files this fork had only rebranded.** `-X ours` settles
+   each hunk both sides changed, and the brand touches nearly every string, so an upstream
+   refactor can land beside this fork's older copy of the same code — a half-renamed enum, a
+   function moved out from under its caller. The test is exact rather than a guess: rebranding
+   the merge base's copy of a file has to give this fork's copy byte for byte, which is only
+   true when nobody here edited it by hand. Those files take upstream's version whole, and the
+   next step puts the name back. A file this fork really changed is never touched this way.
+4. **Re-applies the brand**: `scripts/rebrand.sh` (launcher strings, `launcher/lang/`) and
    `scripts/rebrand-game.sh` (the game's own language table and its title), because upstream
    keeps writing "Horizon" into strings it adds.
-4. **Commits the result** — one merge commit, nothing pushed from the script.
+5. **Commits the result** — one merge commit, nothing pushed from the script.
 
 `.github/workflows/sync-upstream.yml` runs that every day at 04:17 UTC and on demand
 (Actions > sync upstream > Run workflow). It then installs the toolchain, regenerates
