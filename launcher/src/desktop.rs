@@ -221,11 +221,45 @@ pub(crate) fn target(exe: &Path) -> PathBuf {
         .map_or_else(|| exe.to_path_buf(), PathBuf::from)
 }
 
+/// Tells the desktop to read the menu entries and icons again after they were written. KDE keeps
+/// the window class-to-entry and icon lookups in a cache (`kbuildsycoca6`) and Gtk keeps one
+/// beside the icon theme, so without this a window whose entry or icon just changed keeps
+/// drawing what it drew before — the old logo, or a placeholder where it knew nothing — until
+/// the next login. Started, not waited for, and never fatal: a machine without either program
+/// (or a session that is not KDE) simply re-reads them at its own pace.
+fn refresh_caches(data: &Path) {
+    use std::process::{Command, Stdio};
+    let start = |command: &mut Command| {
+        let _ = command
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn();
+    };
+    if data.join("applications").is_dir() {
+        start(&mut Command::new("kbuildsycoca6"));
+    }
+    let theme = data.join("icons/hicolor");
+    if theme.is_dir() {
+        start(
+            Command::new("gtk-update-icon-cache")
+                .arg("-f")
+                .arg("-t")
+                .arg("-q")
+                .arg(&theme),
+        );
+    }
+}
+
 /// Registers the launcher whatever entry is there: for the player turning it on (the Settings
 /// switch, `horizon-launcher desktop-entry`).
 pub fn install(exe: &Path) -> Result<bool, String> {
     let data = data_home().ok_or("No home folder to put the menu entry in.")?;
-    install_in(&data, &target(exe)).map_err(|e| format!("{}: {e}", data.display()))
+    let wrote = install_in(&data, &target(exe)).map_err(|e| format!("{}: {e}", data.display()))?;
+    if wrote {
+        refresh_caches(&data);
+    }
+    Ok(wrote)
 }
 
 /// At start: registers the launcher only when [`needs_repair_in`] says so. Returns whether it
@@ -235,7 +269,11 @@ pub fn repair(exe: &Path) -> Result<bool, String> {
     if !needs_repair_in(&data, std::env::var_os("PATH").as_deref()) {
         return Ok(false);
     }
-    install_in(&data, &target(exe)).map_err(|e| format!("{}: {e}", data.display()))
+    let wrote = install_in(&data, &target(exe)).map_err(|e| format!("{}: {e}", data.display()))?;
+    if wrote {
+        refresh_caches(&data);
+    }
+    Ok(wrote)
 }
 
 pub fn remove() -> Result<(), String> {
