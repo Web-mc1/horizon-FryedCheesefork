@@ -163,6 +163,55 @@ pub fn tab(id: impl Into<SharedString>, label: &str, active: bool, t: &Theme) ->
     )
 }
 
+/// A page's tab in the given tint: the label takes the colour, and the page shown carries a 2 px
+/// underline in it, so the strip reads as a row of coloured tabs rather than one flat list.
+pub fn tab_tinted(
+    id: impl Into<SharedString>,
+    label: &str,
+    active: bool,
+    tint: Hsla,
+    t: &Theme,
+) -> Stateful<Div> {
+    let id = id.into();
+    let d = div()
+        .id(id.clone())
+        .relative()
+        .flex()
+        .items_center()
+        .h(px(32.))
+        .px(px(14.))
+        .cursor_pointer();
+    let d = if active {
+        d.child(selected(1, t))
+    } else {
+        d.child(hovered(&id, 1, t))
+    };
+    let d = if active {
+        d.child(
+            div()
+                .absolute()
+                .bottom_0()
+                .left(px(10.))
+                .right(px(10.))
+                .h(px(2.))
+                .bg(tint),
+        )
+    } else {
+        d
+    };
+    keyboard(
+        track_hover(
+            d.child(
+                text(night::UI, if active { tint } else { tint.opacity(0.78) })
+                    .relative()
+                    .child(label.to_string()),
+            ),
+            id,
+        ),
+        t,
+    )
+}
+
 /// A square button with one icon (Settings, the sidebar's `+`), cut in one step.
 pub fn icon_button(
     id: impl Into<SharedString>,

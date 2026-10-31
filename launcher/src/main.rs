@@ -1969,12 +1969,14 @@ impl Launcher {
         let t = self.theme;
         let n = t.night;
         let mut nav = div().flex().flex_none().items_center().gap(px(4.));
-        for (page, label, _) in Page::ALL {
+        for (i, (page, label, _)) in Page::ALL.into_iter().enumerate() {
             if page == Page::Settings {
                 continue;
             }
+            let tint = shell::c(theme::TAB_TINTS[i % theme::TAB_TINTS.len()]);
             nav = nav.child(
-                shell::tab(format!("nav-{label}"), tr(label), self.page == page, &t).on_click(
+                shell::tab_tinted(format!("nav-{label}"), tr(label), self.page == page, tint, &t)
+                    .on_click(
                     cx.listener(move |this, _: &ClickEvent, _, cx| {
                         this.go(page);
                         cx.notify();

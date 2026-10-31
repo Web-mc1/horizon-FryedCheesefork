@@ -30,6 +30,9 @@ pub const CONTROL: f32 = 34.;
 pub const TOPBAR: f32 = 56.;
 pub const SIDEBAR: f32 = 288.;
 pub const PAGE_GUTTER: f32 = 32.;
+/// The tab strips' tints, in the order the pages and the home tabs take them: the main action's
+/// orange first, then teal, violet, yellow and blue as in the reference.
+pub const TAB_TINTS: [u32; 5] = [0xff9b5e, 0x3fd6b5, 0xb085ff, 0xffd166, 0x5aa9ff];
 
 /// Motion: short and eased out, never bouncy.
 pub const QUICK: Duration = tokens::QUICK.duration();

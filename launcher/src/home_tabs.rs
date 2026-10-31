@@ -69,7 +69,7 @@ impl Launcher {
             .flex()
             .flex_wrap()
             .gap(px(4.))
-            .children(tabs.into_iter().map(|(tab, count)| {
+            .children(tabs.into_iter().enumerate().map(|(i, (tab, count))| {
                 let name = match tab {
                     HomeTab::Overview => tr("Overview"),
                     HomeTab::Mods => tr("Mods"),
@@ -83,7 +83,9 @@ impl Launcher {
                     Some(n) if n > 0 => format!("{name} {n}"),
                     _ => name.to_string(),
                 };
-                shell::tab(format!("home-tab-{tab:?}"), &label, tab == open, &t).on_click(
+                let tint = crate::shell::c(crate::theme::TAB_TINTS[i % crate::theme::TAB_TINTS.len()]);
+                shell::tab_tinted(format!("home-tab-{tab:?}"), &label, tab == open, tint, &t)
+                    .on_click(
                     cx.listener(move |this, _: &ClickEvent, _, cx| {
                         this.home_tab = tab;
                         cx.notify();
