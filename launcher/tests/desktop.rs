@@ -51,5 +51,12 @@ fn menu_registration_preserves_the_package_wrapper() {
     // An unset or empty override keeps standalone installations working.
     desktop_entry(&home, Some(""), &[]);
     assert_eq!(std::fs::read_to_string(&entry).unwrap(), original);
-    std::fs::remove_dir_all(&home).unwrap();
+    // Writing an entry starts the icon cache refresh, which is still writing beside the icons
+    // for a moment: give it that moment rather than fail on a folder it is not done with.
+    let mut tries = 0;
+    while let Err(e) = std::fs::remove_dir_all(&home) {
+        tries += 1;
+        assert!(tries < 40, "{e}");
+        std::thread::sleep(std::time::Duration::from_millis(50));
+    }
 }
