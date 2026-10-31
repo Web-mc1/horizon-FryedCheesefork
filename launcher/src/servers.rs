@@ -638,9 +638,13 @@ pub fn create(spec: &NewServer, tag: Option<&str>, log: &dyn Fn(String)) -> Resu
     }
     if program().is_none() || !game_files_ready() {
         let tag = tag.ok_or_else(|| {
-            Problem::plain("Install a crispylauncher version first (Versions page), then prepare it.")
+            Problem::plain(
+                "Install a crispylauncher version first (Versions page), then prepare it.",
+            )
         })?;
-        log(format!("Setting up the server programs from crispylauncher {tag}"));
+        log(format!(
+            "Setting up the server programs from crispylauncher {tag}"
+        ));
         set_up(tag).map_err(|e| {
             if e.contains("prepared") {
                 Problem {

@@ -51,6 +51,15 @@ The launcher shows the logo of the mod loader an instance plays with.
 Each logo belongs to its project. Showing it says which loader an instance runs; it does not mean
 the project endorses Horizon.
 
+## Launcher icon and mark
+
+The launcher's icon (`packaging/icons/horizon.ico`, `horizon.icns`, `hicolor/`) and the mark the
+window draws (`launcher/assets/logos/cheese.png`) are the cheese emoji: Noto Color Emoji's artwork
+for U+1F9C0 (`2D/svg/emoji_u1f9c0.svg`, rendered unmodified at each size) from
+[googlefonts/noto-emoji](https://github.com/googlefonts/noto-emoji), © Google LLC, under the
+[Apache License 2.0](https://www.apache.org/licenses/LICENSE-2.0). It is the picture Linux desktops
+and Android draw for 🧀.
+
 ## Sign in with Microsoft
 
 The launcher's sign-in buttons follow Microsoft's published branding guidelines for apps that sign in

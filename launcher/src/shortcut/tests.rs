@@ -17,7 +17,10 @@ fn names_fit_every_system() {
         file_name("A/B: C?", System::Windows),
         "A-B- C- (crispylauncher).lnk"
     );
-    assert_eq!(file_name(" .. ", System::Mac), "Instance (crispylauncher).app");
+    assert_eq!(
+        file_name(" .. ", System::Mac),
+        "Instance (crispylauncher).app"
+    );
     assert_eq!(slug("port:all the mods"), "port-all-the-mods");
 }
 
@@ -29,8 +32,9 @@ fn a_linux_entry_plays_its_instance() {
         "ATM",
     );
     assert!(entry.starts_with("[Desktop Entry]\nType=Application\nName=ATM\n"));
-    assert!(entry
-        .contains("\nExec=\"/opt/My crispylauncher/horizon-launcher\" play --instance \"port:atm\"\n"));
+    assert!(entry.contains(
+        "\nExec=\"/opt/My crispylauncher/horizon-launcher\" play --instance \"port:atm\"\n"
+    ));
     assert!(entry.contains("\nTryExec=/opt/My crispylauncher/horizon-launcher\n"));
     assert!(entry.ends_with("\nX-crispylauncher-Instance=port:atm\n"));
     let odd = desktop_entry(Path::new("/x"), "a", "Two\nlines");

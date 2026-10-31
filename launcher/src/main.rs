@@ -54,12 +54,14 @@ mod while_playing;
 mod worlds_page;
 
 use gpui::{
-    actions, div, ease_out_quint, prelude::*, px, relative, size, Animation, AnimationExt,
+    actions, div, ease_out_quint, img, prelude::*, px, relative, size, Animation, AnimationExt,
     AnyElement, App, Application, Bounds, ClickEvent, Context, Div, ElementId, FocusHandle,
-    FontWeight, Hsla, KeyBinding, KeyDownEvent, Menu, MenuItem, MouseDownEvent, PathPromptOptions,
-    Pixels, Point, SharedString, Stateful, Subscription, Window, WindowBounds, WindowOptions,
+    FontWeight, Hsla, Image, ImageFormat, KeyBinding, KeyDownEvent, Menu, MenuItem, MouseDownEvent,
+    ObjectFit, PathPromptOptions, Pixels, Point, SharedString, Stateful, Subscription, Window,
+    WindowBounds, WindowOptions,
 };
 use horizon_launcher::account::{self, Accounts, SignIn, SignInState};
+use horizon_launcher::avatar;
 use horizon_launcher::backend::{self, Job, Msg, Release, Running, Settings, Updates};
 use horizon_launcher::i18n::{self, tr, trf};
 use horizon_launcher::instances;
@@ -70,7 +72,7 @@ use std::borrow::Cow;
 use std::collections::VecDeque;
 use std::sync::atomic::Ordering;
 use std::sync::mpsc::{channel, Receiver, Sender};
-use std::sync::Mutex;
+use std::sync::{Arc, LazyLock, Mutex};
 use std::time::{Duration, Instant};
 use theme::{night, Theme};
 
@@ -232,6 +234,9 @@ struct Launcher {
     accounts: Accounts,
     sign_in: Option<SignIn>,
     sign_in_state: Option<SignInState>,
+    /// The selected Microsoft account's picture, and whose it is (`avatar`): the sidebar shows it
+    /// beside the player's name, the Minecraft head until it is there.
+    avatar: Option<(String, std::path::PathBuf)>,
     /// What to say when the keychain doesn't keep sign-ins ([`account::no_keychain`]).
     keychain: Option<String>,
     /// Whether an account here owns the game, by the keychain's last answers (the owner gate);
@@ -474,6 +479,7 @@ impl Launcher {
             accounts: Accounts::load(),
             sign_in: None,
             sign_in_state: None,
+            avatar: None,
             keychain: None,
             owner: None,
             owner_screen_open: false,
@@ -566,7 +572,35 @@ impl Launcher {
         // What the game and the launcher kept, if the player allows it and there is a server.
         telemetry::send_in_background();
         telemetry::watch_playing(this.tx.clone());
+        this.load_avatar();
         this
+    }
+
+    /// The picture beside the player's name: the one saved for the selected account now, and a
+    /// new one on its way when it is missing or a day old (`avatar`). Offline names have none.
+    fn load_avatar(&mut self) {
+        let Some(account) = self.accounts.selected().cloned() else {
+            self.avatar = None;
+            return;
+        };
+        // Xbox's picture of the account first, then the face of the player's own skin (a public
+        // texture, so it arrives even when the account can't be asked): the row is never a
+        // stranger's default skin.
+        let picture = avatar::cached(&account.uuid).or_else(|| {
+            let (url, _) = account.skin.as_ref()?;
+            avatar::face(&account.uuid, url)
+        });
+        self.avatar = picture.map(|path| (account.uuid.clone(), path));
+        if !avatar::due(&account.uuid) {
+            return;
+        }
+        let tx = self.tx.clone();
+        std::thread::spawn(move || {
+            // A failure leaves the picture already shown in place.
+            if let Ok(Some(path)) = avatar::refresh(&account.uuid) {
+                let _ = tx.send(Msg::Avatar(account.uuid, path));
+            }
+        });
     }
 
     fn go(&mut self, page: Page) {
@@ -742,6 +776,11 @@ impl Launcher {
                 Msg::Reused(_) => self.installed = backend::installed(),
                 Msg::Keychain(said) => self.keychain = said,
                 Msg::Owner(owns) => self.owner = Some(owns),
+                Msg::Avatar(uuid, path) => {
+                    if self.accounts.selected().is_some_and(|a| a.uuid == uuid) {
+                        self.avatar = Some((uuid, path));
+                    }
+                }
                 Msg::Playing(playing) => self.playing = playing,
                 Msg::JavaGame(id, home, cmd) => {
                     self.starting_client = None;
@@ -1066,6 +1105,8 @@ impl Launcher {
             if changed_state {
                 if let SignInState::Done(Ok(_)) = state {
                     self.accounts = Accounts::load();
+                    // The new account's own picture, beside its name.
+                    self.load_avatar();
                     // Sign-in refuses accounts that don't own the game.
                     self.owner = Some(true);
                     self.owner_screen_open = false;
@@ -1463,39 +1504,22 @@ fn version_tag(tag: &str) -> Div {
         )
 }
 
-/// crispylauncher's mark: a wedge of cheese cut in the same 16-step grid as the rest of the art —
-/// a rind along its top, the cut face below it in bands that narrow to the point, three holes.
-/// Yellow in both appearances, as a cheese is.
-fn mark(size: f32, _t: &Theme) -> Div {
-    let u = size / 16.;
-    let rind: Hsla = gpui::rgb(0xffb731).into();
-    let face: Hsla = gpui::rgb(0xffd45e).into();
-    let hole: Hsla = gpui::rgb(0xc98318).into();
-    let bar = |x: f32, y: f32, w: f32, h: f32, color: Hsla| {
-        div()
-            .absolute()
-            .left(px(x * u))
-            .top(px(y * u))
-            .w(px(w * u))
-            .h(px(h * u))
-            .bg(color)
-    };
-    div()
-        .relative()
+/// crispylauncher's mark: the cheese emoji itself — Noto Color Emoji's artwork for U+1F9C0, the
+/// picture Linux desktops and Android draw for 🧀, baked from its own SVG at 512 (`assets/logos/`,
+/// Apache-2.0, see `THIRD_PARTY_NOTICES.md`). One picture for every place the mark goes: the
+/// opening, the sidebar, the title bar and the window's own icon.
+static MARK: LazyLock<Arc<Image>> = LazyLock::new(|| {
+    Arc::new(Image::from_bytes(
+        ImageFormat::Png,
+        include_bytes!("../assets/logos/cheese.png").to_vec(),
+    ))
+});
+
+fn mark(size: f32, _t: &Theme) -> impl IntoElement {
+    img(MARK.clone())
         .flex_none()
         .size(px(size))
-        // The rind, then the cut face in bands off its left edge, each shorter, so the wedge
-        // comes to a point at its right.
-        .child(bar(2., 3., 12., 1., rind))
-        .child(bar(2., 4., 12., 2., face))
-        .child(bar(2., 6., 10., 2., face))
-        .child(bar(2., 8., 8., 2., face))
-        .child(bar(2., 10., 6., 2., face))
-        .child(bar(2., 12., 4., 1., face))
-        // Its holes, cut into the face.
-        .child(bar(4., 5., 2., 1., hole))
-        .child(bar(4., 7., 1., 1., hole))
-        .child(bar(6., 9., 1., 1., hole))
+        .object_fit(ObjectFit::Contain)
 }
 
 /// The last thing the player did was press Tab: focused controls show a ring (a click focuses them
@@ -2091,11 +2115,18 @@ impl Launcher {
                 _ => tr(label),
             };
             strip = strip.child(
-                shell::tab_pill(format!("nav-{label}"), name, None, self.page == page, tint, &t)
-                    .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
-                        this.go(page);
-                        cx.notify();
-                    })),
+                shell::tab_pill(
+                    format!("nav-{label}"),
+                    name,
+                    None,
+                    self.page == page,
+                    tint,
+                    &t,
+                )
+                .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
+                    this.go(page);
+                    cx.notify();
+                })),
             );
         }
         div()
@@ -2318,13 +2349,14 @@ impl Launcher {
                 &t,
             )
         };
-        let mut links = div().flex().flex_wrap().items_center().gap(px(10.)).pt(px(4.));
+        let mut links = div()
+            .flex()
+            .flex_wrap()
+            .items_center()
+            .gap(px(10.))
+            .pt(px(4.));
         if !self.links.sponsor.is_empty() {
-            links = links.child(link(
-                "sponsor",
-                tr("Sponsor"),
-                self.links.sponsor.clone(),
-            ));
+            links = links.child(link("sponsor", tr("Sponsor"), self.links.sponsor.clone()));
         }
         if !self.links.discord.is_empty() {
             links = links.child(link("discord", "Discord", self.links.discord.clone()));
@@ -2332,18 +2364,16 @@ impl Launcher {
         if !self.links.website.is_empty() {
             links = links.child(link("website", tr("Website"), self.links.website.clone()));
         }
-        foot = foot
-            .child(links)
-            .child(
-                shell::text(theme::night::CAPTION, shell::c(n.muted))
-                    .id("launcher-version")
-                    .px(px(4.))
-                    .child(format!("Launcher {}", backend::VERSION))
-                    .on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
-                        this.version_clicked();
-                        cx.notify();
-                    })),
-            );
+        foot = foot.child(links).child(
+            shell::text(theme::night::CAPTION, shell::c(n.muted))
+                .id("launcher-version")
+                .px(px(4.))
+                .child(format!("Launcher {}", backend::VERSION))
+                .on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
+                    this.version_clicked();
+                    cx.notify();
+                })),
+        );
         // Who plays, with the two things to do about it, as the reference's foot has.
         let (name, how) = self.who_plays();
         let face = match self.accounts.player() {
@@ -2351,7 +2381,27 @@ impl Launcher {
             _ => None,
         };
         let picture: AnyElement = match face {
-            Some(uuid) => self.head(&uuid, 36.).into_any_element(),
+            // The Microsoft account's own picture (`avatar`), which has its name beside it; the
+            // Minecraft head stands in until the picture is saved, and for an account whose
+            // picture Xbox has none to give.
+            Some(uuid) => match self
+                .avatar
+                .clone()
+                .filter(|(who, path)| *who == uuid && path.exists())
+            {
+                Some((_, path)) => div()
+                    .flex_none()
+                    .size(px(36.))
+                    .rounded(px(6.))
+                    .overflow_hidden()
+                    .child(
+                        gpui::img(path)
+                            .size(px(36.))
+                            .object_fit(gpui::ObjectFit::Cover),
+                    )
+                    .into_any_element(),
+                None => self.head(&uuid, 36.).into_any_element(),
+            },
             None => div()
                 .flex()
                 .items_center()
@@ -3617,6 +3667,7 @@ impl Launcher {
                             if accounts.save().is_ok() {
                                 this.accounts = accounts;
                             }
+                            this.load_avatar();
                             cx.notify();
                         }),
                     ),
@@ -3627,6 +3678,7 @@ impl Launcher {
                     button(format!("select-{i}"), "Play as", Kind::Secondary, &t).on_click(
                         cx.listener(move |this, _: &ClickEvent, _, cx| {
                             this.play_as(account::Player::Microsoft(uuid.clone()));
+                            this.load_avatar();
                             cx.notify();
                         }),
                     ),
@@ -3644,6 +3696,7 @@ impl Launcher {
                             Err(e) => this.sign_in_state = Some(SignInState::Done(Err(e))),
                         }
                         this.owner = Some(this.accounts.has_owner(account::store()));
+                        this.load_avatar();
                         cx.notify();
                     },
                 )),
@@ -4354,7 +4407,11 @@ impl Render for Launcher {
                         .relative()
                         .opacity(p)
                         .top(px(theme::RISE * 2. * (1. - p)))
-                        .child(if c == ' ' { "\u{00a0}".to_string() } else { c.to_string() })
+                        .child(if c == ' ' {
+                            "\u{00a0}".to_string()
+                        } else {
+                            c.to_string()
+                        })
                 }));
             root = root.child(
                 div()

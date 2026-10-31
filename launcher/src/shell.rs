@@ -392,5 +392,8 @@ pub fn side_action(
             .font_weight(FontWeight::MEDIUM)
             .hover(|s| s.border_color(alpha(n.stroke, n.stroke_alpha * 2.5)))
     };
-    keyboard(track_hover(d.child(div().relative().child(label.to_string())), id), t)
+    keyboard(
+        track_hover(d.child(div().relative().child(label.to_string())), id),
+        t,
+    )
 }

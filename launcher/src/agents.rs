@@ -188,7 +188,8 @@ mod tests {
 
     #[test]
     fn configs_name_the_launcher_and_quote_its_path() {
-        let exe = Path::new("/Applications/crispylauncher Launcher.app/Contents/MacOS/horizon-launcher");
+        let exe =
+            Path::new("/Applications/crispylauncher Launcher.app/Contents/MacOS/horizon-launcher");
         let all = clients(exe);
         let claude = &all[0];
         assert_eq!(

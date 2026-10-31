@@ -743,7 +743,9 @@ impl Launcher {
             Fix::Prepare => match self.selected().cloned() {
                 Some(tag) if backend::is_prepared(&tag) => {
                     self.server_job("Copying the game files", move |log| {
-                        log(format!("Copying the game files prepared for crispylauncher {tag}"));
+                        log(format!(
+                            "Copying the game files prepared for crispylauncher {tag}"
+                        ));
                         servers::set_up(&tag)
                             .map(|_| "The game files are ready. Press Start again.".to_string())
                             .map_err(Problem::plain)
@@ -1250,8 +1252,8 @@ impl Launcher {
         std::thread::spawn(move || {
             let result = (|| {
                 if servers::program().is_none() {
-                    let tag =
-                        tag.ok_or_else(|| Problem::plain("Install a crispylauncher version first."))?;
+                    let tag = tag
+                        .ok_or_else(|| Problem::plain("Install a crispylauncher version first."))?;
                     servers::set_up(&tag).map_err(Problem::plain)?;
                 }
                 if !dir.join("server.toml").is_file() {
@@ -2517,7 +2519,11 @@ impl Launcher {
             .flex_col()
             .border_t_1()
             .border_color(t.rule)
-            .child(self.setting_row("This server's crispylauncher", about, control.into_any_element()));
+            .child(self.setting_row(
+                "This server's crispylauncher",
+                about,
+                control.into_any_element(),
+            ));
         if self.servers.setting("updates", "keep").is_some() {
             rows = rows.child(self.setting_row(
                 "Older versions kept",

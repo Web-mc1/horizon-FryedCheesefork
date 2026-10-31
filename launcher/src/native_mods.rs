@@ -1209,7 +1209,10 @@ mod tests {
         ];
         assert_eq!(agreed(&same, "crispylauncher", get, never).unwrap(), A);
         let none = [pinned("a", None)];
-        assert_eq!(agreed(&none, "crispylauncher", get, || Ok(B.into())).unwrap(), B);
+        assert_eq!(
+            agreed(&none, "crispylauncher", get, || Ok(B.into())).unwrap(),
+            B
+        );
         let split = [pinned("veinminer", Some(A)), pinned("minimap", Some(B))];
         let err = agreed(&split, "crispylauncher", get, never).unwrap_err();
         assert!(

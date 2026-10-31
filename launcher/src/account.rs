@@ -297,7 +297,14 @@ struct Minecraft {
     xuid: Option<String>,
 }
 
-fn minecraft_login(ep: &Endpoints, ms_access: &str) -> Result<Minecraft, String> {
+/// An Xbox Live token from a Microsoft access token: the `XBL3.0` header value for
+/// `relying_party` (`rp://api.minecraftservices.com/` to play, `http://xboxlive.com` for the
+/// profile services) and the account's XUID.
+fn xsts_for(
+    ep: &Endpoints,
+    ms_access: &str,
+    relying_party: &str,
+) -> Result<(String, Option<String>), String> {
     let (status, xbl) = send(
         request_to("POST", &ep.xbox_user),
         Some(Body::Json(json!({
@@ -318,7 +325,7 @@ fn minecraft_login(ep: &Endpoints, ms_access: &str) -> Result<Minecraft, String>
         request_to("POST", &ep.xsts),
         Some(Body::Json(json!({
             "Properties": { "SandboxId": "RETAIL", "UserTokens": [xbl_token] },
-            "RelyingParty": "rp://api.minecraftservices.com/",
+            "RelyingParty": relying_party,
             "TokenType": "JWT",
         }))),
         "Xbox Live",
@@ -333,8 +340,15 @@ fn minecraft_login(ep: &Endpoints, ms_access: &str) -> Result<Minecraft, String>
     ) else {
         return Err("Xbox Live refused the sign-in.".into());
     };
-    let xuid = claims.and_then(|c| str_field(c, "xid"));
-    let (token, expires_in) = minecraft_token(ep, &format!("XBL3.0 x={uhs};{xsts_token}"))?;
+    Ok((
+        format!("XBL3.0 x={uhs};{xsts_token}"),
+        claims.and_then(|c| str_field(c, "xid")),
+    ))
+}
+
+fn minecraft_login(ep: &Endpoints, ms_access: &str) -> Result<Minecraft, String> {
+    let (xtoken, xuid) = xsts_for(ep, ms_access, "rp://api.minecraftservices.com/")?;
+    let (token, expires_in) = minecraft_token(ep, &xtoken)?;
     Ok(Minecraft {
         token,
         expires_at: now() + expires_in,
@@ -461,6 +475,40 @@ fn profile(ep: &Endpoints, token: &str) -> Result<Option<Account>, String> {
         }),
         cape: active("capes").and_then(|c| str_field(&c, "url")),
     }))
+}
+
+/// The account's live picture URL, as Xbox's people service has it (`avatar` saves and shows
+/// it): asked with a Microsoft token renewed from the refresh token `store` keeps for `uuid`.
+/// None when the account has no picture to show.
+pub fn picture_url(uuid: &str) -> Result<Option<String>, String> {
+    let client_id = client_id().ok_or_else(|| NOT_CONFIGURED.to_string())?;
+    let secrets = secrets_in(store(), uuid).ok_or_else(|| SIGN_IN_AGAIN.to_string())?;
+    let ep = Endpoints::live();
+    let ms = refresh_ms(&ep, &client_id, &secrets.refresh_token)?;
+    let (xtoken, _) = xsts_for(&ep, &ms.access, "http://xboxlive.com")?;
+    let (status, v) = send(
+        request_to(
+            "GET",
+            "https://peoplehub.xboxlive.com/users/me/profile/settings?settings=DisplayPicRaw",
+        )
+        .set("Authorization", &xtoken)
+        .set("x-xbl-contract-version", "3")
+        .set("Accept-Language", "en-US"),
+        None,
+        "Xbox Live",
+    )?;
+    if status != 200 {
+        return Ok(None);
+    }
+    Ok(v.pointer("/profileUsers/0/settings")
+        .and_then(Value::as_array)
+        .and_then(|settings| {
+            settings
+                .iter()
+                .find(|s| s.get("id").and_then(Value::as_str) == Some("DisplayPicRaw"))
+        })
+        .and_then(|s| str_field(s, "value"))
+        .filter(|url| !url.is_empty()))
 }
 
 /// What the keychain keeps for one account.

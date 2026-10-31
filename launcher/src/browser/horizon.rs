@@ -227,10 +227,17 @@ fn kind_of(kind: &index::Kind) -> Option<Kind> {
 /// Where the registry's mod policy is: who owns and answers for a project, takedowns.
 pub const POLICY: &str = "https://playhorizon.dev/mods/policy";
 
-/// Whether the crispylauncher project made `p` (the mod policy's "Official": author crispylauncher, source in
-/// the horizon-rust organisation).
+/// The author name the registry's official projects carry: the registry's own records say
+/// "Horizon", and a registry run by this fork says "crispylauncher". Either is the project.
+const OFFICIAL_AUTHORS: [&str; 2] = ["Horizon", "crispylauncher"];
+
+/// Whether the crispylauncher project made `p` (the mod policy's "Official": one of its own author
+/// names, and source in the horizon-rust organisation).
 pub fn official(p: &index::Project) -> bool {
-    p.authors == ["Horizon"] && p.source.starts_with("https://github.com/horizon-rust/")
+    p.authors
+        .iter()
+        .any(|a| OFFICIAL_AUTHORS.iter().any(|o| a.eq_ignore_ascii_case(o)))
+        && p.source.starts_with("https://github.com/horizon-rust/")
 }
 
 /// What the player reads about a registry project before installing it: who made it, whether its
@@ -588,7 +595,8 @@ fn newest<'a>(
 }
 
 const NEEDS_NEWER: &str = "needs a newer crispylauncher than the game you play";
-const NEEDS_PORT: &str = "needs a native port: crispylauncher doesn't run WebAssembly mods any more";
+const NEEDS_PORT: &str =
+    "needs a native port: crispylauncher doesn't run WebAssembly mods any more";
 
 /// Whether version `v` is a WebAssembly mod with code: a `.hmod` that may do more than add
 /// content. The registry keeps it for the modpacks that need it; a modpack installs it with its

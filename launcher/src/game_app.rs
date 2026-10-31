@@ -103,7 +103,8 @@ mod tests {
             &version.join("crispylauncher.app/Contents/MacOS/horizon-ctl"),
             &version.join("horizon-ctl")
         ));
-        let plist = fs::read_to_string(version.join("crispylauncher.app/Contents/Info.plist")).unwrap();
+        let plist =
+            fs::read_to_string(version.join("crispylauncher.app/Contents/Info.plist")).unwrap();
         assert!(plist.contains("<string>crispylauncher</string>"));
         assert_eq!(
             fs::read(version.join("crispylauncher.app/Contents/Resources/horizon.icns")).unwrap(),

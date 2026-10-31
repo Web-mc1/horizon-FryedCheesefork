@@ -1548,7 +1548,9 @@ fn java(action: JavaCmd, as_json: bool) -> Result<(), String> {
             if as_json {
                 json(serde_json::json!(all));
             } else if all.is_empty() {
-                println!("No Java yet. crispylauncher downloads Mojang's when an instance needs it.");
+                println!(
+                    "No Java yet. crispylauncher downloads Mojang's when an instance needs it."
+                );
             } else {
                 for r in &all {
                     let from = match r.source {

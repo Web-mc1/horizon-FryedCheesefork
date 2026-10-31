@@ -73,10 +73,7 @@ impl Launcher {
         }
         let t = self.theme;
         let now = self.accounts.player();
-        let mut menu = div()
-            .id("account-menu")
-            .absolute()
-            .w(px(280.));
+        let mut menu = div().id("account-menu").absolute().w(px(280.));
         menu = if above {
             menu.bottom(px(52.)).left_0()
         } else {

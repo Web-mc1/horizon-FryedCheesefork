@@ -306,9 +306,9 @@ pub fn support(kind: Kind, game_versions: &[String], loaders: &[String]) -> Supp
                 Support::Partial("Lists no Minecraft version.".into())
             }
         }
-        Kind::Modpack => {
-            Support::Partial("crispylauncher runs the mods it can port, from your own downloads.".into())
-        }
+        Kind::Modpack => Support::Partial(
+            "crispylauncher runs the mods it can port, from your own downloads.".into(),
+        ),
         Kind::Shader => Support::No("Not one of crispylauncher's own shader packs.".into()),
         Kind::DataPack => {
             let made_for = match newest_release(game_versions) {

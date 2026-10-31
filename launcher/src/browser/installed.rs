@@ -131,7 +131,10 @@ fn add(
         return Err(format!("{}'s dependencies go too deep.", project.title));
     }
     if let Support::No(why) = project.support() {
-        return Err(format!("{} doesn't run in crispylauncher: {why}", project.title));
+        return Err(format!(
+            "{} doesn't run in crispylauncher: {why}",
+            project.title
+        ));
     }
     let versions = source.versions(&project)?;
     let Some(version) = pick(project.kind, &versions, everything).cloned() else {

@@ -429,7 +429,9 @@ pub(crate) fn fetch_checked(fetch: Fetch, url: &str, sha1: &str) -> Result<Vec<u
     let body = fetch(url)?;
     match sha1_hex(&body) {
         actual if actual == sha1 => Ok(body),
-        actual => Err(format!("is not the one crispylauncher pins (sha1 {actual})")),
+        actual => Err(format!(
+            "is not the one crispylauncher pins (sha1 {actual})"
+        )),
     }
 }
 
