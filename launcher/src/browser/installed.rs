@@ -364,7 +364,7 @@ pub fn install_datapack(
         if coverage.read.is_empty() {
             return Err(format!(
                 "{} would change nothing in crispylauncher yet: it has no functions, predicates or item \
-                 modifiers, and Horizon doesn't read its {} yet.",
+                 modifiers, and crispylauncher doesn't read its {} yet.",
                 project.title,
                 coverage.not_read()
             ));

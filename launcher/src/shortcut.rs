@@ -91,7 +91,7 @@ pub fn desktop_entry(exe: &Path, id: &str, name: &str) -> String {
         "[Desktop Entry]\n\
          Type=Application\n\
          Name={name}\n\
-         Comment=Play {name} in Horizon\n\
+         Comment=Play {name} in crispylauncher\n\
          Exec={} play --instance {}\n\
          TryExec={}\n\
          Icon=horizon\n\

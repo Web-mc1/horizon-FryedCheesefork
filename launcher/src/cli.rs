@@ -1258,7 +1258,7 @@ fn execute(command: Cmd, as_json: bool) -> Result<(), String> {
                 if version.is_some() || world.is_some() || join.is_some() || creative {
                     return Err(format!(
                         "{} plays Minecraft: Java Edition: --version, --world, --creative and \
-                         --join are for Horizon instances.",
+                         --join are for crispylauncher instances.",
                         instance.name
                     ));
                 }

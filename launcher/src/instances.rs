@@ -257,7 +257,7 @@ impl Instance {
             None => Ok(()),
             Some(java) => Err(format!(
                 "{} plays Minecraft {} (Java Edition), not crispylauncher: Play starts it, without a \
-                 Horizon version.",
+                 crispylauncher version.",
                 self.name, java.minecraft
             )),
         }
