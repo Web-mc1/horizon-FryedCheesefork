@@ -1461,35 +1461,39 @@ fn version_tag(tag: &str) -> Div {
         )
 }
 
-/// crispylauncher's mark: two stems, their reflection below, and the horizon across in the accent.
-fn mark(size: f32, t: &Theme) -> Div {
+/// crispylauncher's mark: a wedge of cheese cut in the same 16-step grid as the rest of the art —
+/// a rind along its top, the cut face below it in bands that narrow to the point, three holes.
+/// Yellow in both appearances, as a cheese is.
+fn mark(size: f32, _t: &Theme) -> Div {
     let u = size / 16.;
-    let stem = |x: f32, y: f32, color: Hsla| {
+    let rind: Hsla = gpui::rgb(0xffb731).into();
+    let face: Hsla = gpui::rgb(0xffd45e).into();
+    let hole: Hsla = gpui::rgb(0xc98318).into();
+    let bar = |x: f32, y: f32, w: f32, h: f32, color: Hsla| {
         div()
             .absolute()
             .left(px(x * u))
             .top(px(y * u))
-            .w(px(2. * u))
-            .h(px(4. * u))
+            .w(px(w * u))
+            .h(px(h * u))
             .bg(color)
     };
     div()
         .relative()
         .flex_none()
         .size(px(size))
-        .child(stem(4., 3., t.ink))
-        .child(stem(10., 3., t.ink))
-        .child(stem(4., 8., t.ink.opacity(0.36)))
-        .child(stem(10., 8., t.ink.opacity(0.36)))
-        .child(
-            div()
-                .absolute()
-                .left(px(u))
-                .top(px(7. * u))
-                .w(px(14. * u))
-                .h(px(u))
-                .bg(t.accent),
-        )
+        // The rind, then the cut face in bands off its left edge, each shorter, so the wedge
+        // comes to a point at its right.
+        .child(bar(2., 3., 12., 1., rind))
+        .child(bar(2., 4., 12., 2., face))
+        .child(bar(2., 6., 10., 2., face))
+        .child(bar(2., 8., 8., 2., face))
+        .child(bar(2., 10., 6., 2., face))
+        .child(bar(2., 12., 4., 1., face))
+        // Its holes, cut into the face.
+        .child(bar(4., 5., 2., 1., hole))
+        .child(bar(4., 7., 1., 1., hole))
+        .child(bar(6., 9., 1., 1., hole))
 }
 
 /// The last thing the player did was press Tab: focused controls show a ring (a click focuses them
@@ -2213,7 +2217,7 @@ impl Launcher {
             .px(px(18.))
             .border_b_1()
             .border_color(plate::alpha(n.stroke, n.rule_alpha))
-            .child(mark(20., &t))
+            .child(mark(24., &t))
             .child(
                 shell::text(night::TITLE, shell::c(n.accent))
                     .font_family(theme::DISPLAY_FONT)

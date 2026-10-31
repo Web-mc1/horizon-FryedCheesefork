@@ -173,6 +173,21 @@ impl Launcher {
                 }
             }
         }
+        // A crispylauncher instance has no picture of its own to show: it wears the launcher's
+        // mark rather than a letter.
+        if instance.icon.is_none()
+            && instance.java.is_none()
+            && matches!(instance.kind, InstanceKind::Default | InstanceKind::Own)
+        {
+            return div()
+                .flex()
+                .flex_none()
+                .items_center()
+                .justify_center()
+                .size(px(size))
+                .child(mark(size * 0.72, &t))
+                .into_any_element();
+        }
         blocks::slot(None, &instance.name, size, &t).into_any_element()
     }
 
@@ -206,7 +221,10 @@ impl Launcher {
                         }
                         (None, None, None) => tr("No version installed").into(),
                         (None, Some(_), _) if !prepared => tr("Needs preparing").into(),
-                        (None, Some(tag), Some(_)) => format!("{} · {tag}", tr("Ready")),
+                        // The build's tag is long; the version it plays says more in a row.
+                        (None, Some(tag), Some(_)) => {
+                            format!("{} · Minecraft {}", tr("Ready"), backend::game_version(tag))
+                        }
                         (None, Some(_), None) => tr("Ready").into(),
                     },
                 ),

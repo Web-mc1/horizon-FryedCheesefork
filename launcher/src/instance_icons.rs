@@ -59,8 +59,14 @@ impl Launcher {
                 std::fs::read(grass).ok()
             });
         }
-        let horizon = || Some(horizon_theme::ICON_PNG.to_vec());
-        self.icon_image("mark:horizon".into(), size, false, horizon)
+        // A crispylauncher instance wears the launcher's own mark, drawn in `instance_icon`;
+        // a port or a registry pack keeps upstream's.
+        match instance.kind {
+            InstanceKind::Default | InstanceKind::Own => None,
+            _ => self.icon_image("mark:horizon".into(), size, false, || {
+                Some(horizon_theme::ICON_PNG.to_vec())
+            }),
+        }
     }
 
     /// A mod loader's logo by its id (`fabric`, `quilt`, `forge`, `neoforge`): None while a
