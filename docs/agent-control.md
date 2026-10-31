@@ -6,6 +6,12 @@ covers developers: the surfaces, the full inventory, and the rules every new com
 Players read [Control Horizon with your AI agent](https://playhorizon.dev/docs/agents)
 (playhorizon.dev/docs/agents).
 
+> **Crispy Launcher removes both AI-agent screens.** There is no Settings > AI > Connect an AI
+> agent in the launcher and no Horizon Settings > AI Agent page in the game; the pages below that
+> describe them describe upstream. Everything that does not go through a screen stays: the
+> launcher's `mcp` and `agent-config` commands, `horizon-ctl`, the game's `--control` /
+> `--control-socket` and the No AI switch.
+
 The command lists are generated, so they can't drift:
 
 - [launcher-commands.md](launcher-commands.md): every `horizon-launcher` command, its arguments
@@ -19,12 +25,12 @@ The command lists are generated, so they can't drift:
 
 | Surface | Where | Transport |
 | --- | --- | --- |
-| Game control socket | `horizon-client --control` / `--control-socket PATH`, or Agent Control on in Horizon Settings > AI Agent (`crates/horizon-client/src/control.rs`; commands in `src/game/control.rs`, `agent.rs`, `ui_control.rs`, `saves_control.rs` and friends) | text line in, one JSON line out; Unix socket, or localhost TCP and a token where there is none |
+| Game control socket | `horizon-client --control` / `--control-socket PATH` (`crates/horizon-client/src/control.rs`; commands in `src/game/control.rs`, `agent.rs`, `ui_control.rs`, `saves_control.rs` and friends) | text line in, one JSON line out; Unix socket, or localhost TCP and a token where there is none |
 | `horizon-ctl` | `crates/horizon-client/src/bin/horizon-ctl/` | CLI over the socket; one table of commands (`commands.rs`) gives the help, the argument checks, the MCP tools and the reference |
 | `horizon-ctl mcp` | same | MCP over stdio, one tool per command of the table |
 | Launcher CLI | `launcher/src/cli.rs` | `horizon-launcher <command> [--json]` |
 | Launcher MCP | `launcher/src/mcp.rs`, `cli_tools.rs`, `game_tools.rs` | `horizon-launcher mcp` (stdio): every CLI command as a tool, the session tools, and the game's tools as `game_*` |
-| Connecting | `launcher/src/agents.rs`, `agents_page.rs`; `src/game/agent_settings.rs` | `horizon-launcher agent-config`; Settings > AI in the launcher; Horizon Settings > AI Agent in the game |
+| Connecting | `launcher/src/agents.rs`; `src/game/agent_settings.rs` | `horizon-launcher agent-config` (no screen: Crispy Launcher's launcher and game show none) |
 | No AI | `crates/horizon-core/src/no_ai.rs` | `noAi:true` in `<game home>/horizon-extras.txt`, read by every surface |
 
 ## One MCP server for everything
@@ -82,7 +88,7 @@ passes on without checking it).
 | Modpacks: import, port, play, remove, list | Modpacks | yes | no | yes | yes | `modpack ...`; `modpack_remove` needs `confirm` |
 | Launcher benchmark | (none) | yes | no | yes | yes | |
 | The game it started | (the game) | (horizon-ctl) | yes | (horizon-ctl) | yes | `game_*` |
-| Connect an AI agent | Settings > AI | no | (none) | yes | (none) | `agent-config [--client] [--test]`; the agent is already connected, so there is no tool |
+| Connect an AI agent (removed in Crispy Launcher: the command stays) | — | no | (none) | no | (none) | `agent-config [--client] [--test]`; the agent is already connected, so there is no tool |
 | No AI | Settings > AI | no | (none) | yes | (none) | `no-ai [on\|off]`; the player's switch, never an agent's |
 
 ### Game
@@ -101,8 +107,8 @@ passes on without checking it).
 | Open to LAN | Pause > Open to LAN | part | no | yes | yes | `lan open\|close\|status` |
 | Play with Friends: host, stop, status | Pause | part | no | yes | yes | `friends host\|stop\|status` |
 | Vanilla options, every page | Options | yes | part | yes | yes | `options-get`, `options-set` (all of options.txt, typed); `options PAGE` was socket-only |
-| Horizon Settings: Graphics, Controller, Extras, Mods, AI Agent | Horizon Settings | part | part | yes | yes | `options horizon\|graphics\|extras\|agent...`, then `ui`/`click`/`set` |
-| Agent control on or off, status, connection details | Horizon Settings > AI Agent | no | no | yes | yes | new page (#1353) |
+| Horizon Settings: Graphics, Controller, Extras, Mods | Horizon Settings | part | part | yes | yes | `options horizon\|graphics\|extras...`, then `ui`/`click`/`set` |
+| Agent control on or off, status, connection details | (removed in Crispy Launcher: no page) | no | no | no | no | — |
 | Key binds | Controls > Key Binds | yes | yes | yes | yes | `options-set key_key.jump key.keyboard.j` |
 | Resource packs | Options > Resource Packs | part | part | yes | yes | `options packs`, then `ui` rows and `click`; `options-set resourcePacks` |
 | Chat and commands | Chat | yes | yes | yes | yes | `chat`, `command`, `messages`, `chat-log` |
@@ -138,12 +144,12 @@ The switch is in three places: Settings > AI in the launcher, Horizon Settings i
 
 | Surface | What happens |
 | --- | --- |
-| Game | opens no control socket, even with `--control` (it logs the refusal); Horizon Settings hides AI Agent...; turning it on in a running game closes the socket at once |
+| Game | opens no control socket, even with `--control` (it logs the refusal); turning it on in a running game closes the socket at once |
 | `horizon-ctl` | every command refuses: exit status 4, `{"error": REFUSAL, "kind": "denied"}` |
 | `horizon-ctl mcp` | refuses to start (exit 4, REFUSAL on stderr); a session already running refuses each call |
 | `horizon-launcher mcp` | refuses to start; a running session answers each `tools/call` with error -32000 and REFUSAL |
 | Launcher CLI | `mcp` and `agent-config` are hidden from the help and refuse |
-| Launcher window | Settings > AI shows only the No AI switch, without Connect an AI agent |
+| Launcher window | Settings > AI is the No AI switch alone (Crispy Launcher has no Connect an AI agent) |
 | Companion (#1068) | uses the same switch (see horizon-parity companion-notes.md) |
 
 Every other launcher command stays usable: versions, install, remove, prepare, play, server,
@@ -154,14 +160,14 @@ turn the switch off.
 
 ## Connecting
 
-- **Launcher, Settings > AI > Connect an AI agent:**
-  - a client picker (Claude Code, Codex, Cursor, any MCP client) with its config and a Copy button;
-  - for clients with a CLI, the add command, shown and run only on **Add to ...**:
-    `claude mcp add --scope user horizon -- <exe> mcp`, `codex mcp add horizon -- <exe> mcp`;
-  - **Test the connection** (`agents::self_test`) starts `<exe> mcp`, lists its tools and says
-    how many answered.
-  - `horizon-launcher agent-config [--client ID] [--json] [--test]` prints the same thing.
-- **Game, Horizon Settings > AI Agent:**
+- **Launcher, `horizon-launcher agent-config`** (the launcher's Settings section is gone in
+  Crispy Launcher; the command keeps what it printed):
+  - a client picker (Claude Code, Codex, Cursor, any MCP client) with its config, `[--client ID]`,
+    `[--json]`;
+  - **Test the connection** (`agents::self_test`, `--test`) starts `<exe> mcp`, lists its tools and
+    says how many answered.
+  - The game's page is gone too; agent control is opened by `--control` / `--control-socket`, or by
+    `agentControl` in horizon-extras.txt, off by default:
   - **Agent Control** (`agentControl` in horizon-extras.txt, off by default) opens the default
     endpoint (`$HORIZON_CONTROL`, else `horizon-control.sock` in the runtime directory) in a game
     the player started. Turning it off closes the endpoint and stops its listener.

@@ -130,11 +130,6 @@ impl Game<'_> {
         if self.control.is_some() {
             self.watch_events();
         }
-        if self.screen == Screen::Options
-            && self.ui.options.page() == horizon_client::options_ui::Page::Agent
-        {
-            self.ui.options.agent_status = self.agent_status_lines();
-        }
     }
 
     fn answer(&mut self, request: horizon_client::control::Request, event_loop: &ActiveEventLoop) {
@@ -690,7 +685,6 @@ impl Game<'_> {
                     "extras" => Page::Extras,
                     "credits" => Page::Credits,
                     "horizon" => Page::Horizon,
-                    "agent" => Page::Agent,
                     other => return Err(format!("unknown options page {other}").into()),
                 };
                 if self.screen == Screen::Playing && self.title.is_none() {

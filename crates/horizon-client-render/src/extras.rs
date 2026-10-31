@@ -388,9 +388,8 @@ pub enum Item {
     MouseTweaksWheel,
     Sort,
     SortKey,
-    /// Not on the Extras page: Horizon Settings shows No AI, its AI Agent page Agent Control.
+    /// Not on the Extras page: Horizon Settings shows No AI.
     NoAi,
-    AgentControl,
     /// On the Horizon Settings page.
     DiscordPresence,
 }
@@ -424,7 +423,6 @@ impl Item {
             Item::Sort => "Sort buttons",
             Item::SortKey => "Sort key",
             Item::NoAi => "No AI",
-            Item::AgentControl => "Agent Control",
             Item::DiscordPresence => "Discord Rich Presence",
         }
     }
@@ -435,7 +433,7 @@ impl Item {
             MouseTweaksWheel => MouseTweaks,
             SortKey => Sort,
             Fullbright | DynamicLights | OwnNameTag | MouseTweaks | Sort | AutoReconnect | NoAi
-            | AgentControl | DiscordPresence => {
+            | DiscordPresence => {
                 return None;
             }
         })
@@ -471,9 +469,6 @@ impl Item {
             Item::DiscordPresence => {
                 "Shows Playing Horizon on your Discord profile while Discord runs: menus, single player or multiplayer, the dimension and the time played. Never a world's name or a server's address."
             }
-            Item::AgentControl => {
-                "Your own AI agent can play this game through horizon-ctl or an MCP client, on this computer only."
-            }
         }
     }
     /// The frame-time cost the main switch of an extra shows.
@@ -499,7 +494,6 @@ impl Item {
             Item::MouseTweaksWheel => e.mouse_tweaks_wheel,
             Item::Sort => e.sort,
             Item::NoAi => e.no_ai,
-            Item::AgentControl => e.agent_control,
             Item::DiscordPresence => e.discord_presence,
             _ => return None,
         })
@@ -526,7 +520,6 @@ impl Item {
             Item::MouseTweaksWheel => e.mouse_tweaks_wheel = !e.mouse_tweaks_wheel,
             Item::Sort => e.sort = !e.sort,
             Item::NoAi => e.no_ai = !e.no_ai,
-            Item::AgentControl => e.agent_control = !e.agent_control,
             Item::DiscordPresence => e.discord_presence = !e.discord_presence,
             Item::SortKey => {}
         }

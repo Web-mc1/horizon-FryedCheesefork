@@ -3,7 +3,6 @@
 
 #![cfg_attr(target_os = "windows", windows_subsystem = "windows")]
 
-mod agents_page;
 mod art;
 mod blocks;
 mod cli;
@@ -271,14 +270,14 @@ struct Launcher {
     proxy_focus: FocusHandle,
     /// Opt-in data collection: the player's answer and Settings' section (`collection`).
     collection: collection::Collection,
-    /// Settings' "Connect an AI agent" (`agents_page`).
-    agents: agents_page::AgentsUi,
+    /// Settings' "No AI" row: why turning it on or off failed, while the row shows it.
+    no_ai_error: Option<String>,
     /// How many play crispylauncher now, while the server answers ("N playing now" on the Play page).
     playing: Option<u64>,
     tx: Sender<Msg>,
     rx: Receiver<Msg>,
     _appearance: Subscription,
-    /// Redraws when the window gains or loses focus: the sky moves only in front.
+    /// Redraws when the window gains or loses focus.
     _activation: Subscription,
     /// The session's measurements (`perf.rs`), and when the steps they time began.
     perf: perf::Perf,
@@ -413,6 +412,7 @@ impl Launcher {
             theme: Theme::for_appearance(settings.appearance, settings.accent, window.appearance()),
             page: Page::from_env(),
             switches: 0,
+            no_ai_error: None,
             content_scroll: Scrollbar::default(),
             long_list: cull::Cull::default(),
             opening: (!settings.skip_opening).then(|| {
@@ -489,7 +489,6 @@ impl Launcher {
             client_run: None,
             client_vars: Vec::new(),
             collection: collection::Collection::load(),
-            agents: agents_page::AgentsUi::default(),
             playing: None,
             tx,
             rx,
@@ -3287,8 +3286,43 @@ impl Launcher {
                     }),
             )
             .child(self.collection_section(cx))
-            .children(self.agents_section(cx))
             .children(self.dev_options_section(cx))
+    }
+
+    /// Settings' "No AI" row: the switch that hides and turns off every AI feature — agent
+    /// control of the launcher and the game, `horizon-ctl` and the MCP servers.
+    fn no_ai_row(&mut self, n: usize, cx: &mut Context<Self>) -> Div {
+        let t = self.theme;
+        let on = backend::no_ai();
+        let toggle =
+            switch("no-ai", on, &t).on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
+                this.no_ai_error = backend::set_no_ai(!on).err();
+                cx.notify();
+            }));
+        let row = index_row(
+            n,
+            tr("No AI"),
+            Some(
+                div()
+                    .child(tr(if on {
+                        "On: every AI feature is hidden and off. The game opens no control socket, and horizon-ctl and the MCP servers refuse."
+                    } else {
+                        "Hides and turns off every AI feature: agent control of the launcher and the game, horizon-ctl and the MCP servers."
+                    }))
+                    .into_any_element(),
+            ),
+            Some(toggle.into_any_element()),
+            &t,
+        );
+        match self.no_ai_error.clone() {
+            Some(e) => div()
+                .flex()
+                .flex_col()
+                .gap(px(8.))
+                .child(row)
+                .child(notice(e, &t)),
+            None => row,
+        }
     }
 
     /// Settings' Game arguments row: the extra arguments the game starts with, kept in
