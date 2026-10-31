@@ -46,7 +46,6 @@ mod servers_page;
 mod shell;
 mod shortcut_page;
 mod skin_page;
-mod sky;
 mod specimen;
 mod switch_page;
 mod theme;
@@ -74,7 +73,7 @@ use std::sync::atomic::Ordering;
 use std::sync::mpsc::{channel, Receiver, Sender};
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
-use theme::Theme;
+use theme::{night, Theme};
 
 #[derive(Clone, Copy, PartialEq)]
 enum Page {
@@ -333,9 +332,6 @@ struct Launcher {
     /// The player's servers, for the sidebar until the Servers page has read them.
     side_servers: Vec<horizon_launcher::servers::Entry>,
     /// The pixel art made for this window (`art.rs`), and pictures downloaded by URL.
-    sky: sky::Sky,
-    /// When the sky next asks for a frame, and the timer that will draw it.
-    sky_wake: Option<(Instant, gpui::Task<()>)>,
     /// The window's scale, as of its last frame, for art drawn outside `render`'s reach.
     scale: f32,
 }
@@ -530,8 +526,6 @@ impl Launcher {
             shortcuts: Default::default(),
             offline_name: offline_name(),
             side_servers: horizon_launcher::servers::list(),
-            sky: sky::Sky::default(),
-            sky_wake: None,
             scale: window.scale_factor(),
         };
         this.reload_instances();
@@ -1961,121 +1955,155 @@ fn megabytes(bytes: u64) -> String {
 // ----- Pages -------------------------------------------------------------------------------------
 
 impl Launcher {
-    /// The top bar: the mark and name over the sidebar (in the title bar on Windows and Linux
-    /// client-side decorations), the pages with their icons, then the account and Settings.
-    /// The top bar over the pages: their tabs, then the account chip and Settings. No plate: the
-    /// sky shows through, under a 1 px rule.
-    fn topbar(&mut self, cx: &mut Context<Self>) -> Div {
+    /// The band over the pages, as the reference draws it: the selected instance's picture, its
+    /// name, what it plays and when it was last played, then its folder, memory and Play.
+    fn pane_header(&mut self, cx: &mut Context<Self>) -> Div {
         let t = self.theme;
         let n = t.night;
-        let mut nav = div().flex().flex_none().items_center().gap(px(4.));
-        for (i, (page, label, _)) in Page::ALL.into_iter().enumerate() {
-            if page == Page::Settings {
-                continue;
-            }
-            let tint = shell::c(theme::TAB_TINTS[i % theme::TAB_TINTS.len()]);
-            nav = nav.child(
-                shell::tab_tinted(format!("nav-{label}"), tr(label), self.page == page, tint, &t)
-                    .on_click(
-                    cx.listener(move |this, _: &ClickEvent, _, cx| {
-                        this.go(page);
-                        cx.notify();
-                    }),
+        let instance = self.selected_instance().cloned();
+        let java = instance.as_ref().and_then(|i| i.java.clone());
+        let tag = self
+            .selected()
+            .cloned()
+            .or_else(|| java.is_some().then(String::new));
+        let prepared = tag.as_deref().is_some_and(backend::is_prepared);
+        let name = instance.as_ref().map_or_else(
+            || {
+                if tag.is_some() {
+                    "crispylauncher".to_string()
+                } else {
+                    "Minecraft".to_string()
+                }
+            },
+            |i| i.name.clone(),
+        );
+        let what = match (&java, &tag) {
+            (Some(j), _) => match &j.loader {
+                Some(l) => format!(
+                    "{} {} for Minecraft {}",
+                    l.kind.name(),
+                    l.version,
+                    j.minecraft
                 ),
-            );
-        }
-        // Only a signed-in account says "Microsoft account"; otherwise an offline name, or the
-        // one the game made up. A signed-in one shows its face (its UUID's default skin).
-        let (name, how) = self.who_plays();
-        let face = match self.accounts.player() {
-            account::Player::Microsoft(_) => self.accounts.selected().map(|a| a.uuid.clone()),
-            _ => None,
+                None => format!("Minecraft {}", j.minecraft),
+            },
+            // A crispylauncher build plays one Minecraft version: name it, as the reference
+            // names the loader's.
+            (None, Some(tag)) => format!("Minecraft {}", backend::game_version(tag)),
+            (None, None) => tr("No version installed yet.").to_string(),
         };
-        let picture = match face {
-            Some(uuid) => self.head(&uuid, 28.).into_any_element(),
-            None => div()
-                .flex()
-                .items_center()
-                .justify_center()
-                .size(px(28.))
-                .bg(plate::alpha(n.card_hi, n.card_hi_alpha))
-                .child(blocks::icon("user", 16., shell::c(n.muted)))
-                .into_any_element(),
+        let picture: AnyElement = match &instance {
+            Some(i) => self.instance_icon(i, 56.),
+            None => div().relative().child(mark(40., &t)).into_any_element(),
         };
-        let account = shell::chip("account", &t)
-            .max_w(px(200.))
-            .child(div().relative().child(picture))
-            .child(
-                div()
-                    .relative()
-                    .flex()
-                    .flex_col()
-                    .flex_1()
-                    .min_w_0()
-                    .overflow_hidden()
-                    .child(
-                        shell::text(theme::night::UI, shell::c(n.ink))
-                            .font_weight(FontWeight::SEMIBOLD)
-                            .line_height(px(16.))
-                            .truncate()
-                            .child(name),
-                    )
-                    .child(
-                        shell::text(theme::night::CAPTION, shell::c(n.muted))
-                            .truncate()
-                            .child(how),
-                    ),
-            )
-            .on_click(cx.listener(|this, event: &ClickEvent, _, cx| {
-                if this.closed_by_this_press(event) {
-                    return;
-                }
-                this.account_menu = !this.account_menu;
-                if this.account_menu {
-                    // Who can play may have changed elsewhere since the window opened.
-                    this.accounts = Accounts::load();
-                }
-                cx.notify();
-            }));
-        let account = div()
-            .relative()
-            .child(account)
-            .children(self.account_menu(cx));
-        let settings = shell::icon_button(
-            "nav-Settings",
-            "sliders",
-            40.,
-            self.page == Page::Settings,
-            &t,
-        )
-        .on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
-            this.go(Page::Settings);
-            cx.notify();
-        }));
+        let actions = self
+            .selected()
+            .is_some()
+            .then(|| self.home_actions(prepared || java.is_some(), java.is_some(), cx));
         div()
             .flex()
             .flex_none()
             .items_center()
-            .h(px(theme::TOPBAR))
-            .pl(px(theme::PAGE_GUTTER - 14.))
-            .pr(px(12.))
-            .border_b_1()
-            .border_color(plate::alpha(n.stroke, n.rule_alpha))
-            .child(nav)
+            .gap(px(16.))
+            .px(px(theme::PAGE_GUTTER))
+            .py(px(16.))
+            .child(div().relative().flex_none().child(picture))
             .child(
                 div()
-                    .ml_auto()
                     .flex()
-                    .flex_none()
-                    .items_center()
-                    .gap(px(8.))
-                    .child(account)
-                    .child(settings),
+                    .flex_col()
+                    .flex_1()
+                    .min_w_0()
+                    .gap(px(2.))
+                    .child(
+                        shell::text(night::TITLE, shell::c(n.ink))
+                            .text_size(px(26.))
+                            .font_weight(FontWeight::SEMIBOLD)
+                            .truncate()
+                            .child(name),
+                    )
+                    .child(
+                        shell::text(night::UI, shell::c(n.ink_soft))
+                            .truncate()
+                            .child(what),
+                    )
+                    .children(instance.as_ref().map(|i| {
+                        shell::text(night::CAPTION, shell::c(n.muted))
+                            .truncate()
+                            .child(instances_page::played_line(i))
+                    })),
             )
+            .children(actions.map(|actions| div().flex_none().child(actions)))
     }
 
-    /// The sidebar, from the top of the window: the wordmark, crispylauncher and the imported modpacks,
-    /// the player's servers, then the launcher's own update, the community links and its version.
+    /// The strip under the header: the instance's views, then the launcher's own pages, each in its
+    /// own tint with what it holds beside it. One strip for both, as the reference has, so nothing
+    /// is reachable twice.
+    fn tab_strip(&mut self, cx: &mut Context<Self>) -> Div {
+        let t = self.theme;
+        let n = t.night;
+        let tints = theme::TAB_TINTS;
+        let homes = self.home_tab_list(cx);
+        let open = self.home_tab;
+        let mut strip = div().flex().flex_wrap().items_center().gap(px(2.));
+        for (i, (tab, count)) in homes.iter().copied().enumerate() {
+            let tint = shell::c(tints[i % tints.len()]);
+            let active = self.page == Page::Play && tab == open;
+            strip = strip.child(
+                shell::tab_pill(
+                    format!("home-tab-{tab:?}"),
+                    tab.label(),
+                    count,
+                    active,
+                    tint,
+                    &t,
+                )
+                .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
+                    this.go(Page::Play);
+                    this.home_tab = tab;
+                    cx.notify();
+                })),
+            );
+        }
+        // A rule between the instance's views and the launcher's own pages.
+        strip = strip.child(
+            div()
+                .flex_none()
+                .w(px(1.))
+                .h(px(20.))
+                .mx(px(10.))
+                .bg(plate::alpha(n.stroke, n.rule_alpha * 2.)),
+        );
+        let base = homes.len();
+        for (k, (page, label, _)) in Page::ALL.into_iter().enumerate() {
+            if page == Page::Play {
+                continue;
+            }
+            let tint = shell::c(tints[(base + k) % tints.len()]);
+            let name = match page {
+                Page::Mods => tr("Browse"),
+                _ => tr(label),
+            };
+            strip = strip.child(
+                shell::tab_pill(format!("nav-{label}"), name, None, self.page == page, tint, &t)
+                    .on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
+                        this.go(page);
+                        cx.notify();
+                    })),
+            );
+        }
+        div()
+            .flex()
+            .flex_none()
+            .px(px(theme::PAGE_GUTTER - 12.))
+            .border_b_1()
+            .border_color(plate::alpha(n.stroke, n.rule_alpha))
+            .child(strip)
+    }
+
+    /// The sidebar, from the top of the window: the wordmark, the player's instances and servers on
+    /// a list that scrolls with them, then the launcher's own actions stacked full width and who
+    /// plays, pinned to the bottom as the reference stacks them.
     fn sidebar(&mut self, window: &Window, cx: &mut Context<Self>) -> Stateful<Div> {
         let t = self.theme;
         let n = t.night;
@@ -2089,18 +2117,18 @@ impl Launcher {
         ));
         let items = self.instance_items(heading, cx);
         let mut rows = items.len();
-        let list = div()
+        let mut list = div()
             .flex()
             .flex_col()
             .gap(px(2.))
-            .child(heading(tr("INSTANCES").into()).child(add))
+            // The reference groups its list: Java instances here, servers under them.
+            .child(heading(tr("JAVA INSTANCES").into()).child(add))
             .children(items);
         let servers: Vec<_> = self
             .servers
             .sidebar_list()
             .map(<[_]>::to_vec)
             .unwrap_or_else(|| self.side_servers.clone());
-        let mut list = list;
         if !servers.is_empty() {
             list = list.child(heading(tr("SERVERS").into()));
         }
@@ -2136,41 +2164,71 @@ impl Launcher {
                     })),
             );
         }
-        let link = |id: &'static str, label: &'static str, icon: &'static str, url: String| {
-            let id = SharedString::from(id);
-            track_hover(
-                div()
-                    .id(id.clone())
-                    .relative()
-                    .flex()
-                    .items_center()
-                    .gap(px(10.))
-                    .h(px(32.))
-                    .px(px(8.))
+        // Sculk's card below the list: seen without scrolling, on every page but Servers, which
+        // shows its wide banner. Tall where the sidebar has the height for it besides the wordmark,
+        // its rows (52 high each, under headings of 36) and the buttons. After a while on screen a
+        // "Hide" beside its label puts it away for good.
+        if self.page != Page::Servers && !self.settings.partner_hidden {
+            let free = f32::from(window.viewport_size().height)
+                - 64.
+                - 36. * headings as f32
+                - 52. * rows as f32
+                - 330.;
+            let mut side = div().relative().mt(px(10.)).child(partner::card(
+                "partner-side",
+                theme::SIDEBAR - 28.,
+                free < partner::TALL_HEIGHT,
+                &t,
+            ));
+            if self.settings.partner_seen_secs >= partner::SEEN_BEFORE_HIDE {
+                let hide = div()
+                    .id("partner-hide")
+                    .absolute()
+                    .top(px(0.))
+                    .right(px(0.))
                     .cursor_pointer()
-                    .child(hover_layer(&id, shell::c(n.card_hi).opacity(0.5), 0., 0.))
                     .child(
-                        div()
-                            .relative()
-                            .child(blocks::icon(icon, 16., shell::c(n.muted))),
+                        text(theme::MICRO)
+                            .text_color(t.muted)
+                            .hover(move |s| s.text_color(t.ink))
+                            .child(tr("HIDE")),
                     )
-                    .child(
-                        shell::text(theme::night::UI, shell::c(n.ink_soft))
-                            .relative()
-                            .child(label),
-                    )
-                    .on_click(move |_, _, cx| cx.open_url(&url)),
-                id,
-            )
-        };
-        let mut foot = div().mt_auto().flex().flex_col().gap(px(2.)).pt(px(12.));
+                    .on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
+                        this.settings.partner_hidden = true;
+                        this.settings.save();
+                        cx.notify();
+                    }));
+                side = side.child(keyboard(hide, &t));
+            }
+            list = list.child(side);
+        }
+        // A custom title bar carries the name already; the sidebar keeps its own wordmark, as the
+        // reference has, so the launcher reads as launched from it.
+        let brand = div()
+            .flex()
+            .flex_none()
+            .items_center()
+            .gap(px(10.))
+            .h(px(64.))
+            .px(px(18.))
+            .border_b_1()
+            .border_color(plate::alpha(n.stroke, n.rule_alpha))
+            .child(mark(20., &t))
+            .child(
+                shell::text(night::TITLE, shell::c(n.accent))
+                    .font_family(theme::DISPLAY_FONT)
+                    .font_weight(FontWeight::BOLD)
+                    .child("Crispy Launcher"),
+            );
+        // The foot: the launcher's own actions, stacked full width, then who plays.
+        let mut foot = div().flex().flex_col().gap(px(6.));
         let update = |line: String| {
             plate::plate(&n)
                 .flex()
                 .flex_col()
                 .gap(px(8.))
                 .p(px(12.))
-                .mb(px(6.))
+                .mb(px(4.))
                 .child(
                     shell::text(theme::night::UI, shell::c(n.ink))
                         .relative()
@@ -2202,95 +2260,204 @@ impl Launcher {
             }
             _ => {}
         }
-        // Sculk's card above the links: seen without scrolling, on every page but Servers, which shows
-        // its wide banner. Tall where the sidebar has the height for it besides the wordmark, its rows
-        // (52 high each, under headings of 40) and the links, compact otherwise. After a while on
-        // screen a "Hide" beside its label puts it away for good.
-        if self.page != Page::Servers && !self.settings.partner_hidden {
-            let free = f32::from(window.viewport_size().height)
-                - theme::TOPBAR
-                - 40. * headings as f32
-                - 52. * rows as f32
-                - 110.;
-            let mut side = div().relative().mb(px(8.)).child(partner::card(
-                "partner-side",
-                theme::SIDEBAR - 20.,
-                free < partner::TALL_HEIGHT,
-                &t,
-            ));
-            if self.settings.partner_seen_secs >= partner::SEEN_BEFORE_HIDE {
-                let hide = div()
-                    .id("partner-hide")
-                    .absolute()
-                    .top(px(0.))
-                    .right(px(0.))
-                    .cursor_pointer()
-                    .child(
-                        text(theme::MICRO)
-                            .text_color(t.muted)
-                            .hover(move |s| s.text_color(t.ink))
-                            .child(tr("HIDE")),
-                    )
-                    .on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
-                        this.settings.partner_hidden = true;
-                        this.settings.save();
+        foot = foot
+            .child(
+                shell::side_action("new-instance", tr("New instance"), true, &t).on_click(
+                    cx.listener(|this, _: &ClickEvent, _, cx| {
+                        this.open_instance_dialog(None);
                         cx.notify();
-                    }));
-                side = side.child(keyboard(hide, &t));
-            }
-            foot = foot.child(side);
-        }
+                    }),
+                ),
+            )
+            .child(
+                shell::side_action("download-modpacks", tr("Download modpacks"), false, &t)
+                    .on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
+                        this.show_modpack(None);
+                        cx.notify();
+                    })),
+            )
+            .child(
+                shell::side_action("import-modpack", tr("Import modpack file"), false, &t)
+                    .on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
+                        this.choose_pack(false, cx);
+                        cx.notify();
+                    })),
+            )
+            .child(
+                shell::side_action("appearance", tr("Appearance"), false, &t).on_click(
+                    cx.listener(|this, _: &ClickEvent, _, cx| {
+                        this.go(Page::Settings);
+                        cx.notify();
+                    }),
+                ),
+            );
+        // The community links and the launcher's version, small under the actions.
+        let link = |id: &'static str, label: &'static str, url: String| {
+            let id = SharedString::from(id);
+            keyboard(
+                track_hover(
+                    div()
+                        .id(id.clone())
+                        .relative()
+                        .flex()
+                        .items_center()
+                        .h(px(22.))
+                        .px(px(4.))
+                        .cursor_pointer()
+                        .child(hover_layer(&id, shell::c(n.card_hi).opacity(0.4), 0., 0.))
+                        .child(shell::text(night::CAPTION, shell::c(n.muted)).child(label))
+                        .on_click(move |_, _, cx| cx.open_url(&url)),
+                    id,
+                ),
+                &t,
+            )
+        };
+        let mut links = div().flex().flex_wrap().items_center().gap(px(10.)).pt(px(4.));
         if !self.links.sponsor.is_empty() {
-            foot = foot.child(link(
+            links = links.child(link(
                 "sponsor",
                 tr("Sponsor"),
-                "heart",
                 self.links.sponsor.clone(),
             ));
         }
         if !self.links.discord.is_empty() {
-            foot = foot.child(link(
-                "discord",
-                "Discord",
-                "message",
-                self.links.discord.clone(),
-            ));
+            links = links.child(link("discord", "Discord", self.links.discord.clone()));
         }
         if !self.links.website.is_empty() {
-            foot = foot.child(link(
-                "website",
-                tr("Website"),
-                "globe",
-                self.links.website.clone(),
-            ));
+            links = links.child(link("website", tr("Website"), self.links.website.clone()));
         }
-        foot = foot.child(
-            shell::text(theme::night::CAPTION, shell::c(n.muted))
-                .id("launcher-version")
-                .px(px(8.))
-                .pt(px(6.))
-                .child(format!("Launcher {}", backend::VERSION))
-                .on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
-                    this.version_clicked();
-                    cx.notify();
-                })),
-        );
-        // Custom title bars carry the mark and name already.
-        let brand = (!titlebar::draws_brand(window)).then(|| {
-            div()
+        foot = foot
+            .child(links)
+            .child(
+                shell::text(theme::night::CAPTION, shell::c(n.muted))
+                    .id("launcher-version")
+                    .px(px(4.))
+                    .child(format!("Launcher {}", backend::VERSION))
+                    .on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
+                        this.version_clicked();
+                        cx.notify();
+                    })),
+            );
+        // Who plays, with the two things to do about it, as the reference's foot has.
+        let (name, how) = self.who_plays();
+        let face = match self.accounts.player() {
+            account::Player::Microsoft(_) => self.accounts.selected().map(|a| a.uuid.clone()),
+            _ => None,
+        };
+        let picture: AnyElement = match face {
+            Some(uuid) => self.head(&uuid, 36.).into_any_element(),
+            None => div()
                 .flex()
-                .flex_none()
                 .items_center()
-                .gap(px(10.))
-                .h(px(theme::TOPBAR))
-                .px(px(8.))
-                .child(mark(24., &t))
-                .child(
-                    shell::text(theme::night::TITLE, shell::c(n.ink))
-                        .font_family(theme::DISPLAY_FONT)
-                        .child("crispylauncher"),
-                )
-        });
+                .justify_center()
+                .size(px(36.))
+                .bg(plate::alpha(n.card_hi, n.card_hi_alpha))
+                .child(blocks::icon("user", 18., shell::c(n.muted)))
+                .into_any_element(),
+        };
+        let has_account = self.accounts.selected().is_some();
+        let account = div()
+            .relative()
+            .flex()
+            .flex_col()
+            .gap(px(8.))
+            .pt(px(10.))
+            .mt(px(2.))
+            .border_t_1()
+            .border_color(plate::alpha(n.stroke, n.rule_alpha))
+            .child(
+                div()
+                    .id("account")
+                    .relative()
+                    .flex()
+                    .items_center()
+                    .gap(px(10.))
+                    .h(px(44.))
+                    .cursor_pointer()
+                    .child(div().relative().flex_none().child(picture))
+                    .child(
+                        div()
+                            .flex()
+                            .flex_col()
+                            .min_w_0()
+                            .child(
+                                shell::text(night::UI, shell::c(n.ink))
+                                    .font_weight(FontWeight::SEMIBOLD)
+                                    .truncate()
+                                    .child(name),
+                            )
+                            .child(
+                                shell::text(night::CAPTION, shell::c(n.muted))
+                                    .truncate()
+                                    .child(how),
+                            ),
+                    )
+                    .on_click(cx.listener(|this, event: &ClickEvent, _, cx| {
+                        if this.closed_by_this_press(event) {
+                            return;
+                        }
+                        this.account_menu = !this.account_menu;
+                        if this.account_menu {
+                            // Who can play may have changed elsewhere since the window opened.
+                            this.accounts = Accounts::load();
+                        }
+                        cx.notify();
+                    })),
+            )
+            .child(
+                div()
+                    .flex()
+                    .gap(px(6.))
+                    .child(
+                        shell::side_action("add-account", tr("Add account"), false, &t)
+                            .h(px(32.))
+                            .on_click(cx.listener(|this, event: &ClickEvent, _, cx| {
+                                if this.closed_by_this_press(event) {
+                                    return;
+                                }
+                                this.account_menu = !this.account_menu;
+                                if this.account_menu {
+                                    this.accounts = Accounts::load();
+                                }
+                                cx.notify();
+                            })),
+                    )
+                    .children(has_account.then(|| {
+                        let id = SharedString::from("remove-account");
+                        keyboard(
+                            track_hover(
+                                div()
+                                    .id(id.clone())
+                                    .relative()
+                                    .flex()
+                                    .items_center()
+                                    .justify_center()
+                                    .h(px(32.))
+                                    .px(px(12.))
+                                    .cursor_pointer()
+                                    .child(hover_layer(
+                                        &id,
+                                        shell::c(n.card_hi).opacity(0.5),
+                                        0.,
+                                        0.,
+                                    ))
+                                    .child(
+                                        shell::text(night::UI, shell::c(n.ink_soft))
+                                            .relative()
+                                            .child(tr("Remove")),
+                                    )
+                                    .on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
+                                        this.account_menu = false;
+                                        this.go(Page::Settings);
+                                        cx.notify();
+                                    })),
+                                id,
+                            ),
+                            &t,
+                        )
+                    })),
+            )
+            .children(self.account_menu(true, cx));
         shell::sidebar_plate(&t)
             .id("sidebar")
             .flex()
@@ -2298,12 +2465,29 @@ impl Launcher {
             .flex_none()
             .w(px(theme::SIDEBAR))
             .h_full()
-            .px(px(10.))
-            .pb(px(12.))
-            .overflow_y_scroll()
-            .children(brand)
-            .child(list)
-            .child(foot)
+            .child(brand)
+            .child(
+                div()
+                    .flex()
+                    .flex_col()
+                    .flex_1()
+                    .min_h_0()
+                    .id("sidebar-list")
+                    .overflow_y_scroll()
+                    .px(px(10.))
+                    .pt(px(6.))
+                    .child(list),
+            )
+            .child(
+                div()
+                    .flex()
+                    .flex_col()
+                    .flex_none()
+                    .px(px(10.))
+                    .pb(px(12.))
+                    .child(foot)
+                    .child(account),
+            )
     }
 
     /// Whether `event` is the press that just closed a menu from outside it (on the menu's
@@ -2341,12 +2525,14 @@ impl Launcher {
                         .flex()
                         .flex_col()
                         .gap(px(2.))
+                        .min_w_0()
+                        .max_w(px(132.))
                         .child(
                             shell::text(theme::night::CAPTION, t.muted)
                                 .font_weight(FontWeight::SEMIBOLD)
                                 .child(tr("Version").to_string()),
                         )
-                        .child(shell::text(theme::night::UI, t.ink).child(label)),
+                        .child(shell::text(theme::night::UI, t.ink).truncate().child(label)),
                 )
                 .child(blocks::icon("chevron-down", 20., t.muted))
                 .on_click(cx.listener(|this, event: &ClickEvent, _, cx| {
@@ -2448,25 +2634,15 @@ impl Launcher {
             .cloned()
             .or_else(|| java.is_some().then(String::new))
         else {
-            // No hero without a version: the page starts below the top bar like the others.
-            return div()
-                .flex()
-                .flex_col()
-                .gap(px(24.))
-                .pt(px(28.))
-                .child(page_header(
-                    "Play",
-                    "Start the game, or run a server for others to join.",
-                    &t,
-                ))
-                .child(centered(tr("No version installed yet."), &t).child(
-                    button("go-versions", "Choose a version", Kind::Secondary, &t).on_click(
-                        cx.listener(|this, _: &ClickEvent, _, cx| {
-                            this.go(Page::Versions);
-                            cx.notify();
-                        }),
-                    ),
-                ));
+            // Nothing to play yet: the header band says so, and the page offers the next step.
+            return centered(tr("No version installed yet."), &t).child(
+                button("go-versions", "Choose a version", Kind::Secondary, &t).on_click(
+                    cx.listener(|this, _: &ClickEvent, _, cx| {
+                        this.go(Page::Versions);
+                        cx.notify();
+                    }),
+                ),
+            );
         };
         let prepared = backend::is_prepared(&tag);
         // Prepared without sounds (#1035): Prepare again is the fix, so it stands out.
@@ -2474,18 +2650,6 @@ impl Launcher {
         let version = java
             .as_ref()
             .map_or_else(|| backend::game_version(&tag), |j| j.minecraft.clone());
-        let hero = match &java {
-            // Its own game: the Minecraft version and the loader, never crispylauncher's.
-            Some(j) => {
-                let game = match &j.loader {
-                    Some(l) => format!("{version} · {} {}", l.kind.name(), l.version),
-                    None => version.clone(),
-                };
-                self.hero("", &game, true, cx)
-            }
-            None => self.hero(&tag, &version, prepared, cx),
-        };
-        let actions = self.home_actions(prepared || java.is_some(), java.is_some(), cx);
         let left = self.download_left();
         let steps = self.preparing.then(|| self.steps(&version, left));
 
@@ -2677,73 +2841,64 @@ impl Launcher {
             }
         }
 
-        // The banner: the hero and the Play row over the sky (`sky.rs`), or over the player's
-        // own picture under a veil of the page colour. It reaches the content's edges and the top
-        // bar.
-        let veil = |angle: f32, from: f32, to: f32, at: f32| {
-            div()
-                .absolute()
-                .top_0()
-                .left_0()
-                .size_full()
-                .bg(gpui::linear_gradient(
-                    angle,
-                    gpui::linear_color_stop(t.page.opacity(from), 0.),
-                    gpui::linear_color_stop(t.page.opacity(to), at),
-                ))
-        };
-        let picture = self.home_background().map(|path| {
-            [
-                gpui::img(path)
-                    .absolute()
-                    .top_0()
-                    .left_0()
-                    .size_full()
-                    .object_fit(gpui::ObjectFit::Cover)
-                    .into_any_element(),
-                veil(90., 0.82, 0., 0.62).into_any_element(),
-                veil(180., 0., 0.75, 1.).into_any_element(),
-            ]
-        });
-        let banner = div()
-            .relative()
-            .flex()
-            .flex_col()
-            .justify_end()
-            .min_h(px(340.))
-            .mx(px(-theme::PAGE_GUTTER))
-            .px(px(theme::PAGE_GUTTER))
-            .pb(px(28.))
-            .gap(px(24.))
-            .overflow_hidden()
-            .children(picture.into_iter().flatten())
-            .child(
-                div()
-                    .relative()
-                    .flex()
-                    .items_end()
-                    .gap(px(32.))
-                    .child(
-                        div()
-                            .flex_1()
-                            .min_w_0()
-                            .flex()
-                            .flex_col()
-                            .gap(px(28.))
-                            .child(hero)
-                            .child(actions)
-                            // The preparation's steps right under Play, where the player looks
-                            // after pressing it, not below the fold (#666).
-                            .children(steps),
-                    )
-                    // Notes and friends are crispylauncher's.
-                    .children(java.is_none().then(|| self.home_card(&tag, cx))),
-            );
-        let mut page = div().flex().flex_col().gap(px(28.)).child(banner);
+        // The strip above carries the instance's views; the page itself starts with how Play is
+        // going, then whatever the open view shows.
+        let mut page = div().flex().flex_col().gap(px(18.)).w_full().min_w_0();
+        // The preparation's steps right under the header, where the player looks after pressing
+        // Play, not below the fold (#666).
+        page = page.children(steps);
         if let Some(e) = self.prepare_error.clone() {
             page = page.child(notice(e, &t));
         }
-        page = page.child(self.home_tabs(rows, cx));
+        // Players who answered the first-run question before the ping existed read about it once
+        // here.
+        if !self.settings.ping_notice_seen && !self.collection.consent.needs_asking() {
+            page = page.child(
+                crate::plate::plate(&t.night)
+                    .flex()
+                    .flex_col()
+                    .gap(px(6.))
+                    .p(px(16.))
+                    .w_full()
+                    .max_w(px(560.))
+                    .child(
+                        shell::text(theme::night::UI, shell::c(t.night.ink))
+                            .relative()
+                            .child(telemetry::PING_NAME),
+                    )
+                    .child(
+                        shell::text(theme::night::CAPTION, shell::c(t.night.muted))
+                            .relative()
+                            .child(telemetry::PING),
+                    )
+                    .child(
+                        shell::text(theme::night::UI, shell::c(t.night.accent_hi))
+                            .relative()
+                            .id("ping-notice-ok")
+                            .font_weight(FontWeight::SEMIBOLD)
+                            .cursor_pointer()
+                            .hover(|s| s.opacity(0.8))
+                            .child("Got it")
+                            .on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
+                                this.settings.ping_notice_seen = true;
+                                this.settings.save();
+                                cx.notify();
+                            })),
+                    ),
+            );
+        }
+        page = page.child(self.home_body(rows, cx));
+        // crispylauncher's news and joining a friend are crispylauncher's: Java instances keep
+        // their own game entirely.
+        if java.is_none() {
+            page = page.child(
+                div()
+                    .flex()
+                    .flex_wrap()
+                    .gap(px(16.))
+                    .child(self.home_card(&tag, cx)),
+            );
+        }
         if let Some(e) = self.client_error.clone() {
             page = page.child(notice(e, &t));
         }
@@ -4015,7 +4170,6 @@ impl Render for Launcher {
         self.github.note_focus(window);
         self.args_focused = self.args_focus.is_focused(window);
         self.proxy_focused = self.proxy_focus.is_focused(window);
-        let size = window.viewport_size();
         let content = match self.page {
             Page::Play => self.play_page(cx),
             Page::Versions => self.versions_page(cx),
@@ -4024,7 +4178,6 @@ impl Render for Launcher {
             Page::Notes => self.notes_page(cx),
             Page::Settings => self.settings_page(cx),
         };
-        self.sky.free_replaced(window);
         // The new page fades in and rises a few pixels.
         let content = div()
             .relative()
@@ -4042,17 +4195,8 @@ impl Render for Launcher {
         if self.opening.is_none() && window.focused(cx).is_none() {
             window.focus(&self.root_focus);
         }
-        let (sky, next) = self.sky.render(
-            &t.night,
-            (size.width.into(), size.height.into()),
-            window.scale_factor(),
-            window.is_window_active(),
-            Instant::now(),
-        );
-        if let Some(next) = next {
-            self.wake_sky(next, cx);
-        }
-        let topbar = self.topbar(cx);
+        let header = self.pane_header(cx);
+        let strip = self.tab_strip(cx);
         let sidebar = self.sidebar(window, cx);
         let mut root = div()
             .id("root")
@@ -4100,7 +4244,8 @@ impl Render for Launcher {
                             .flex_col()
                             .flex_1()
                             .min_w_0()
-                            .child(topbar)
+                            .child(header)
+                            .child(strip)
                             .child(
                                 self.content_scroll
                                     .wrap(
@@ -4116,11 +4261,7 @@ impl Render for Launcher {
                                                     .w_full()
                                                     .min_w_0()
                                                     .px(px(theme::PAGE_GUTTER))
-                                                    .pt(px(if self.page == Page::Play {
-                                                        0.
-                                                    } else {
-                                                        28.
-                                                    }))
+                                                    .pt(px(24.))
                                                     .pb(px(48.))
                                                     .child(content),
                                             ),
@@ -4211,8 +4352,7 @@ impl Render for Launcher {
             .flex_col()
             .relative()
             .size_full()
-            .bg(t.side)
-            .child(sky)
+            .bg(t.page)
             .children(titlebar::render(&t, window))
             .child(root.flex_1().min_h_0())
             .children(titlebar::resize_handles(window))
@@ -4253,22 +4393,6 @@ impl Launcher {
         }
         handle.set_offset(offset);
         window.request_animation_frame();
-    }
-
-    /// Draws the window again in `after`, when the sky next changes, unless a frame comes sooner.
-    fn wake_sky(&mut self, after: Duration, cx: &mut Context<Self>) {
-        let at = Instant::now() + after;
-        if self.sky_wake.as_ref().is_some_and(|(when, _)| *when <= at) {
-            return;
-        }
-        let timer = cx.spawn(async move |this, cx| {
-            cx.background_executor().timer(after).await;
-            let _ = this.update(cx, |this, cx| {
-                this.sky_wake = None;
-                cx.notify();
-            });
-        });
-        self.sky_wake = Some((at, timer));
     }
 
     fn skip_opening(&mut self) {

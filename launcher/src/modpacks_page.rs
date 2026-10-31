@@ -61,7 +61,7 @@ impl Launcher {
         }
     }
 
-    fn choose_pack(&mut self, folder: bool, cx: &mut Context<Self>) {
+    pub(super) fn choose_pack(&mut self, folder: bool, cx: &mut Context<Self>) {
         let paths = cx.prompt_for_paths(PathPromptOptions {
             files: !folder,
             directories: folder,

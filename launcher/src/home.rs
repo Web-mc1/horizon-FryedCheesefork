@@ -7,156 +7,8 @@ use crate::shell::{action, c, label, Action};
 use theme::night;
 
 impl Launcher {
-    /// The focal point: what will start and its state, the instance's name, when it was played,
-    /// and an update when one waits. No `tag`: a Java instance's Minecraft (`game` then names its
-    /// loader too).
-    pub(super) fn hero(
-        &mut self,
-        tag: &str,
-        game: &str,
-        prepared: bool,
-        cx: &mut Context<Self>,
-    ) -> Div {
-        let t = self.theme;
-        let n = t.night;
-        let icon = self
-            .selected_instance()
-            .cloned()
-            .map(|i| self.instance_icon(&i, 56.));
-        let instance = self.selected_instance();
-        let name = instance.map_or(
-            if tag.is_empty() {
-                "Minecraft"
-            } else {
-                "crispylauncher"
-            },
-            |i| i.name.as_str(),
-        );
-        let mut what = vec![format!("Minecraft: Java Edition {game}")];
-        if !tag.is_empty() {
-            what.push(format!(
-                "crispylauncher {}",
-                horizon_launcher::nightly::label(tag)
-                    .unwrap_or_else(|| tag.trim_start_matches('v').to_string())
-            ));
-        }
-        what.push(tr(if prepared { "Ready" } else { "Needs preparing" }).to_string());
-        if let Some(playing) = self.playing {
-            what.push(format!("{} playing now", thousands(playing)));
-        }
-        let state = div()
-            .flex()
-            .items_center()
-            .gap(px(8.))
-            .child(
-                div()
-                    .flex_none()
-                    .size(px(6.))
-                    .bg(if prepared { t.success } else { t.warn }),
-            )
-            .child(
-                shell::text(night::CAPTION, c(n.ink_soft))
-                    .font_weight(FontWeight::MEDIUM)
-                    .child(what.join(" · ")),
-            );
-        // Never squeezed by the rows below: the ping notice can make it tall.
-        let mut hero = div()
-            .flex()
-            .flex_none()
-            .flex_col()
-            .gap(px(10.))
-            .child(state)
-            .child(
-                div()
-                    .flex()
-                    .items_center()
-                    .gap(px(16.))
-                    .children(icon)
-                    .child(
-                        shell::text(night::DISPLAY, c(n.ink))
-                            .min_w_0()
-                            .truncate()
-                            .child(name.to_string()),
-                    ),
-            )
-            .children(instance.map(|i| {
-                shell::text(night::UI, c(n.ink_soft)).child(instances_page::played_line(i))
-            }));
-        // A Java instance (no crispylauncher tag) isn't offered crispylauncher's updates.
-        if let Some(release) = self.updates.horizon.as_ref().filter(|_| !tag.is_empty()) {
-            let installing = self.installing.as_ref().filter(|(t, _)| *t == release.tag);
-            let line = shell::text(night::CAPTION, c(n.muted))
-                .flex()
-                .items_center()
-                .gap(px(8.))
-                .child(div().size(px(6.)).bg(c(n.accent_hi)))
-                .child(format!("{} available", update_name(release)));
-            hero = hero.child(match installing {
-                Some((_, p)) => line
-                    .child(
-                        div()
-                            .w(px(120.))
-                            .flex()
-                            .child(progress_bar(Some(self.bar), &t)),
-                    )
-                    .child(format!("{:.0}%", p * 100.)),
-                None => line.child(
-                    div()
-                        .id("install-update")
-                        .text_color(c(n.accent_hi))
-                        .font_weight(FontWeight::SEMIBOLD)
-                        .cursor_pointer()
-                        .hover(|s| s.opacity(0.8))
-                        .child("Install")
-                        .on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
-                            this.install_update();
-                            cx.notify();
-                        })),
-                ),
-            });
-        }
-        // Players who answered the first-run question before the ping existed read about it
-        // once here.
-        if !self.settings.ping_notice_seen && !self.collection.consent.needs_asking() {
-            hero = hero.child(
-                crate::plate::plate(&n)
-                    .flex()
-                    .flex_none()
-                    .flex_col()
-                    .gap(px(6.))
-                    .p(px(16.))
-                    .w_full()
-                    .max_w(px(560.))
-                    .child(
-                        shell::text(night::UI, c(n.ink))
-                            .relative()
-                            .child(telemetry::PING_NAME),
-                    )
-                    .child(
-                        shell::text(night::CAPTION, c(n.muted))
-                            .relative()
-                            .child(telemetry::PING),
-                    )
-                    .child(
-                        shell::text(night::UI, c(n.accent_hi))
-                            .relative()
-                            .id("ping-notice-ok")
-                            .font_weight(FontWeight::SEMIBOLD)
-                            .cursor_pointer()
-                            .hover(|s| s.opacity(0.8))
-                            .child("Got it")
-                            .on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
-                                this.settings.ping_notice_seen = true;
-                                this.settings.save();
-                                cx.notify();
-                            })),
-                    ),
-            );
-        }
-        hero
-    }
-
-    /// Play, then what else the instance offers: its version (crispylauncher), its mods, its folder.
+    /// What the header band offers beside the instance's name: its folder, its version's memory
+    /// (crispylauncher builds), then Play, as the reference orders them.
     /// `ready`: prepared, or a Java instance (its game comes with Play).
     pub(super) fn home_actions(&self, ready: bool, java: bool, cx: &mut Context<Self>) -> Div {
         let t = self.theme;
@@ -192,7 +44,7 @@ impl Launcher {
                 }));
         }
         let mut play = action("play", Action::Main, &t)
-            .min_w(px(180.))
+            .min_w(px(132.))
             .child(
                 div()
                     .relative()
@@ -225,25 +77,17 @@ impl Launcher {
             .flex_wrap()
             .items_center()
             .gap(px(10.))
-            .child(play)
-            // crispylauncher's versions don't apply to a Java instance.
-            .children((!java).then(|| self.picker(cx)))
-            .child(
-                action("home-mods", Action::Quiet, &t)
-                    .child(label(tr("Mods").to_string()))
-                    .on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
-                        this.go(Page::Mods);
-                        cx.notify();
-                    })),
-            )
             .children(folder.map(|home| {
-                action("home-folder", Action::Quiet, &t)
-                    .child(label(tr("Folder").to_string()))
+                action("home-folder", Action::Raised, &t)
+                    .child(label(tr("Open folder").to_string()))
                     .on_click(move |_, _, cx| {
                         let _ = std::fs::create_dir_all(&home);
                         cx.open_with_system(&home);
                     })
             }))
+            // crispylauncher's versions don't apply to a Java instance.
+            .children((!java).then(|| self.picker(cx)))
+            .child(play)
     }
 
     /// The card beside the hero, for a crispylauncher version: a line from a release's notes, and

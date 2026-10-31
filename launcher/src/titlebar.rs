@@ -7,19 +7,6 @@ use horizon_launcher::backend::Appearance;
 /// Whether Windows uses a transparent native title bar for the launcher's custom chrome.
 pub const DRAWN: bool = cfg!(target_os = "windows");
 
-pub fn draws_brand(window: &Window) -> bool {
-    #[cfg(target_os = "linux")]
-    return matches!(
-        window.window_decorations(),
-        gpui::Decorations::Client { .. }
-    );
-    #[cfg(not(target_os = "linux"))]
-    {
-        let _ = window;
-        DRAWN
-    }
-}
-
 pub fn options() -> TitlebarOptions {
     TitlebarOptions {
         title: Some("Crispy Launcher".into()),

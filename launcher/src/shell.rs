@@ -163,55 +163,6 @@ pub fn tab(id: impl Into<SharedString>, label: &str, active: bool, t: &Theme) ->
     )
 }
 
-/// A page's tab in the given tint: the label takes the colour, and the page shown carries a 2 px
-/// underline in it, so the strip reads as a row of coloured tabs rather than one flat list.
-pub fn tab_tinted(
-    id: impl Into<SharedString>,
-    label: &str,
-    active: bool,
-    tint: Hsla,
-    t: &Theme,
-) -> Stateful<Div> {
-    let id = id.into();
-    let d = div()
-        .id(id.clone())
-        .relative()
-        .flex()
-        .items_center()
-        .h(px(32.))
-        .px(px(14.))
-        .cursor_pointer();
-    let d = if active {
-        d.child(selected(1, t))
-    } else {
-        d.child(hovered(&id, 1, t))
-    };
-    let d = if active {
-        d.child(
-            div()
-                .absolute()
-                .bottom_0()
-                .left(px(10.))
-                .right(px(10.))
-                .h(px(2.))
-                .bg(tint),
-        )
-    } else {
-        d
-    };
-    keyboard(
-        track_hover(
-            d.child(
-                text(night::UI, if active { tint } else { tint.opacity(0.78) })
-                    .relative()
-                    .child(label.to_string()),
-            ),
-            id,
-        ),
-        t,
-    )
-}
-
 /// A square button with one icon (Settings, the sidebar's `+`), cut in one step.
 pub fn icon_button(
     id: impl Into<SharedString>,
@@ -247,38 +198,6 @@ pub fn icon_button(
         ),
         t,
     )
-}
-
-/// The account chip's plate: `card` cut in one step with its stroke, for the picture and two
-/// lines that go in as children.
-pub fn chip(id: impl Into<SharedString>, t: &Theme) -> Stateful<Div> {
-    let id = id.into();
-    let n = t.night;
-    let d = div()
-        .id(id.clone())
-        .relative()
-        .flex()
-        .min_w_0()
-        .items_center()
-        .gap(px(10.))
-        .h(px(40.))
-        .pl(px(6.))
-        .pr(px(12.))
-        .cursor_pointer()
-        .child(
-            cut(
-                night::PIXEL_CORNER,
-                1,
-                Some(alpha(n.card, n.card_alpha)),
-                Some((alpha(n.stroke, n.stroke_alpha), 1.)),
-            )
-            .absolute()
-            .top_0()
-            .left_0()
-            .size_full(),
-        )
-        .child(hovered(&id, 1, t));
-    keyboard(track_hover(d, id), t)
 }
 
 /// What a night button is: the one main action (accent, cut in one step), a raised one
@@ -360,4 +279,118 @@ pub fn action(id: impl Into<SharedString>, kind: Action, t: &Theme) -> Stateful<
 /// A label for an [`action`], over its hover layer.
 pub fn label(text_: impl Into<SharedString>) -> Div {
     div().relative().child(text_.into())
+}
+
+/// A tab in the pane's strip, as the reference draws them: the name in `tint`, how many things it
+/// holds as a badge beside it, and a 2 px underline in the same colour while it is the one shown.
+/// No plate, so a long strip reads as a row of coloured names rather than a row of buttons.
+pub fn tab_pill(
+    id: impl Into<SharedString>,
+    label: &str,
+    count: Option<usize>,
+    active: bool,
+    tint: Hsla,
+    t: &Theme,
+) -> Stateful<Div> {
+    let id = id.into();
+    let n = t.night;
+    let d = div()
+        .id(id.clone())
+        .relative()
+        .flex()
+        .flex_none()
+        .items_center()
+        .gap(px(4.))
+        .h(px(46.))
+        .px(px(8.))
+        .cursor_pointer()
+        .child(hover_fade(
+            &id,
+            move || {
+                div()
+                    .absolute()
+                    .top(px(6.))
+                    .bottom(px(6.))
+                    .left_0()
+                    .right_0()
+                    .rounded(px(4.))
+                    .bg(alpha(if n.dark { n.ink } else { n.stroke }, 0.07))
+            },
+            |d, a| d.opacity(a),
+        ))
+        .child(
+            text(night::UI, tint.opacity(if active { 1. } else { 0.74 }))
+                .relative()
+                .font_weight(if active {
+                    FontWeight::SEMIBOLD
+                } else {
+                    FontWeight::MEDIUM
+                })
+                .child(label.to_string()),
+        )
+        .children(count.filter(|c| *c > 0).map(|c| {
+            div()
+                .relative()
+                .flex()
+                .items_center()
+                .justify_center()
+                .h(px(18.))
+                .min_w(px(16.))
+                .px(px(3.))
+                .rounded(px(4.))
+                .bg(tint.opacity(0.18))
+                .child(
+                    text(crate::theme::MICRO, tint)
+                        .font_weight(FontWeight::SEMIBOLD)
+                        .child(c.to_string()),
+                )
+        }))
+        .when(active, |d| {
+            d.child(
+                div()
+                    .absolute()
+                    .bottom_0()
+                    .left(px(8.))
+                    .right(px(8.))
+                    .h(px(2.))
+                    .bg(tint),
+            )
+        });
+    keyboard(track_hover(d, id), t)
+}
+
+/// A button in the sidebar's foot: as wide as the sidebar, so the stack reads as one column. The
+/// main one (`primary`) is the accent, the others `card_hi` with the plates' stroke.
+pub fn side_action(
+    id: impl Into<SharedString>,
+    label: &str,
+    primary: bool,
+    t: &Theme,
+) -> Stateful<Div> {
+    let id = id.into();
+    let n = t.night;
+    let d = div()
+        .id(id.clone())
+        .relative()
+        .flex()
+        .items_center()
+        .justify_center()
+        .h(px(38.))
+        .rounded(px(4.))
+        .text_size(px(night::UI.px))
+        .cursor_pointer();
+    let d = if primary {
+        d.bg(alpha(n.accent, 1.))
+            .text_color(c(n.on_accent))
+            .font_weight(FontWeight::BOLD)
+            .hover(|s| s.opacity(0.9))
+    } else {
+        d.bg(alpha(n.card_hi, n.card_hi_alpha))
+            .border_1()
+            .border_color(alpha(n.stroke, n.stroke_alpha))
+            .text_color(c(n.ink_soft))
+            .font_weight(FontWeight::MEDIUM)
+            .hover(|s| s.border_color(alpha(n.stroke, n.stroke_alpha * 2.5)))
+    };
+    keyboard(track_hover(d.child(div().relative().child(label.to_string())), id), t)
 }

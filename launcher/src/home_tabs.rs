@@ -1,6 +1,6 @@
-//! The selected instance's tabs under Home's hero (docs/design-system.md, "Night"; plan R0, screen
-//! 5): Overview (what Play needs), then its worlds, servers, packs, screenshots and, once the game
-//! has said something, its console. One at a time, instead of one long page under the hero.
+//! The selected instance's views (plan R0, screen 5): Overview (what Play needs), then its mods,
+//! worlds, servers, packs, screenshots and, once the game has said something, its console. One at a
+//! time, in the pane's strip above the content rather than as one long page.
 use super::*;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -29,12 +29,25 @@ impl HomeTab {
             _ => HomeTab::Overview,
         }
     }
+
+    /// Its name in the strip.
+    pub(super) fn label(self) -> &'static str {
+        match self {
+            HomeTab::Overview => tr("Overview"),
+            HomeTab::Mods => tr("Mods"),
+            HomeTab::Worlds => tr("Worlds"),
+            HomeTab::Multiplayer => tr("Multiplayer"),
+            HomeTab::Packs => tr("Packs"),
+            HomeTab::Screenshots => tr("Screenshots"),
+            HomeTab::Console => tr("Console"),
+        }
+    }
 }
 
 impl Launcher {
     /// The tabs the selected instance has now, with how many things each holds (None: not known
     /// yet, or nothing to count). Screenshots and Console only once there is something to show.
-    fn home_tab_list(&mut self, cx: &mut Context<Self>) -> Vec<(HomeTab, Option<usize>)> {
+    pub(super) fn home_tab_list(&mut self, cx: &mut Context<Self>) -> Vec<(HomeTab, Option<usize>)> {
         let mut tabs = vec![(HomeTab::Overview, None)];
         if self.selected_instance().is_none() {
             return tabs;
@@ -55,9 +68,9 @@ impl Launcher {
         tabs
     }
 
-    /// The tab strip and the open tab's content; `overview` is what Play needs (Home's rows).
-    pub(super) fn home_tabs(&mut self, overview: Div, cx: &mut Context<Self>) -> Div {
-        let t = self.theme;
+    /// The open tab's content, under the pane's strip: `overview` is what Play needs (Home's rows).
+    /// The tab's own buttons sit above it, on the right, as a list's header would.
+    pub(super) fn home_body(&mut self, overview: Div, cx: &mut Context<Self>) -> Div {
         let tabs = self.home_tab_list(cx);
         // A tab that went away (no screenshots left, another instance) falls back to Overview.
         let open = tabs
@@ -65,34 +78,6 @@ impl Launcher {
             .map(|(tab, _)| *tab)
             .find(|tab| *tab == self.home_tab)
             .unwrap_or(HomeTab::Overview);
-        let strip = div()
-            .flex()
-            .flex_wrap()
-            .gap(px(4.))
-            .children(tabs.into_iter().enumerate().map(|(i, (tab, count))| {
-                let name = match tab {
-                    HomeTab::Overview => tr("Overview"),
-                    HomeTab::Mods => tr("Mods"),
-                    HomeTab::Worlds => tr("Worlds"),
-                    HomeTab::Multiplayer => tr("Multiplayer"),
-                    HomeTab::Packs => tr("Packs"),
-                    HomeTab::Screenshots => tr("Screenshots"),
-                    HomeTab::Console => tr("Console"),
-                };
-                let label = match count {
-                    Some(n) if n > 0 => format!("{name} {n}"),
-                    _ => name.to_string(),
-                };
-                let tint = crate::shell::c(crate::theme::TAB_TINTS[i % crate::theme::TAB_TINTS.len()]);
-                shell::tab_tinted(format!("home-tab-{tab:?}"), &label, tab == open, tint, &t)
-                    .on_click(
-                    cx.listener(move |this, _: &ClickEvent, _, cx| {
-                        this.home_tab = tab;
-                        cx.notify();
-                    }),
-                )
-            }));
-        // The open tab's own buttons sit at the strip's end, as a list's header would.
         let (actions, body) = match open {
             HomeTab::Overview => (None, Some(overview.into_any_element())),
             HomeTab::Mods => {
@@ -111,16 +96,15 @@ impl Launcher {
         div()
             .flex()
             .flex_col()
-            .gap(px(20.))
-            .child(
+            .gap(px(14.))
+            .children(actions.flatten().map(|actions| {
                 div()
                     .flex()
-                    .items_center()
-                    .justify_between()
-                    .gap(px(16.))
-                    .child(strip)
-                    .children(actions.flatten()),
-            )
+                    .flex_wrap()
+                    .justify_end()
+                    .child(actions)
+                    .into_any_element()
+            }))
             .children(body)
     }
 }

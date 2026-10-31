@@ -118,8 +118,9 @@ Geist (400, 500, 600) and Geist Mono (400), bundled under the SIL Open Font Lice
   written in mono beside the label, not on the track.
 - **Segmented control / tabs**: a `plate_soft` pill; the selected segment is an `ink` pill with
   `page` text that slides over `move`.
-- **Navigation**: text only. Launcher: a top bar with the mark and "Horizon" on the left and
-  the pages on the right, `label` size, `muted`, the current one `ink` on a soft pill. Game
+- **Navigation**: text only. Launcher: the instance's views and the launcher's own pages in one
+  tinted strip under the header band, `ui` size, the current one in its tint with a 2 px underline
+  and what it holds as a badge beside it. Game
   menus keep their sidebar layout (it suits a controller), but as a plain column of text items
   under the mark, with no panel tint and no border: the current one `ink` on a soft pill that
   slides to it.
@@ -135,11 +136,11 @@ Geist (400, 500, 600) and Geist Mono (400), bundled under the SIL Open Font Lice
 ## Surfaces
 
 - **Launcher** (`launcher/`): moving to the Night look below, screen by screen; screens not rebuilt
-  yet draw the Blocks parts in the night's colours (`Night::blocks`). A top bar (wordmark, the pages as
-  tabs, the account chip, Settings), a sidebar (the instances, the hosted servers, the launcher's
-  own version and channel at its foot), and the page over a stone texture. Home opens on a pixel
-  landscape banner with the hero, the version picker and Play; Mods holds the mod, resource pack
-  and modpack tabs; Versions and Patch notes are lists of panels; Settings is
+  yet draw the Blocks parts in the night's colours (`Night::blocks`). A sidebar (the wordmark, the
+  instances, the hosted servers, then the launcher's own actions and who plays at its foot), and
+  beside it a header band over a strip of tabs, with the page under them on a flat pane. Home opens
+  on what the instance needs, with its folder, its version and Play in the band; Mods holds the
+  mod, resource pack and modpack tabs; Versions and Patch notes are lists of panels; Settings is
   grouped panels of rows. Dark by default, Light or System in Settings (Appearance).
 - **Website** (horizon-rust/horizon-site): the Blocks look below. The same page structure as before (what it
   is, screenshots, parity, launcher, patch notes, community), headings in Pixelify Sans, lists as
@@ -192,14 +193,14 @@ of the main action. The game's menus keep `LIGHT` and `DARK`.
 
 ## Night
 
-The launcher's look from 0.3: a pixel night sky that turns to a sunset at the horizon, with the
-content on top. Its tokens are `horizon_theme::night` (`NIGHT`, and `DAWN` for players who pick
-Light); `tokens.css` carries them as `--night-*`. The game's menus don't use it.
+The launcher's look from 0.3: a flat deep-purple pane with the content on plates over it. Its
+tokens are `horizon_theme::night` (`NIGHT`, and `DAWN` for players who pick Light); `tokens.css`
+carries them as `--night-*`. The game's menus don't use it.
 
-- **The sky is the brand, the content is the UI.** The sky, the stepped sun, the banded clouds and
-  the skyline are pixel art drawn in code on one grid per layer, edges crisp, never smoothed. On
-  top of it the screen is made of what the player owns: instance icons, world thumbnails, server
-  icons, their skin's head, mods and counts. No ornaments, no empty cards.
+- **The player's things are the brand, the content is the UI.** The screen is made of what the
+  player owns: instance icons, world thumbnails, server icons, their skin's head, mods and counts.
+  No ornaments, no empty cards, and nothing drawn behind them to compete: pixel art is kept to the
+  marks and icons, edges crisp, never smoothed.
 - **Plates only where text needs them.** A plate is `card` at its opacity with a 1 px `stroke`;
   `card_hi` for a selected or raised one. Text sits on the bare sky only over its upper stops
   (`UNCARDED_STOPS`): the sunset is too bright for light text. A plate cuts each corner in two 4 px
@@ -239,42 +240,48 @@ Light); `tokens.css` carries them as `--night-*`. The game's menus don't use it.
 | `accent-hi` | `#a08cff` | `#5333c9` | accent text, focus ring |
 | `success`, `warn`, `danger` | `#5fd39a` `#f5b45a` `#ff8a78` | `#136336` `#7a4f00` `#a3301d` | Ready, updates, errors |
 
-- **Motion that means something**: the sky drifts slowly and stops when the window is hidden or
-  unfocused; the interface moves only to show cause and effect (a row arrives where it was added,
-  progress fills). Reduced motion: nothing moves. The launcher's sky (`launcher/src/sky.rs`) moves
-  in whole texels on a half-second beat, so it asks for two frames a second at most;
-  `HORIZON_LAUNCHER_MOTION=off` stills it, `always` keeps it moving unfocused (for recordings).
+- **Motion that means something**: the interface moves only to show cause and effect (a page rises
+  in, a row arrives where it was added, progress fills); nothing drifts on its own, and the pane
+  behind the cards is one flat colour.
 - **Copy says what happens** ("Downloads 26.3 and Java 21, about 600 MB"), never praises.
 - The specimen (`HORIZON_LAUNCHER_PAGE=specimen horizon-launcher`) draws the type and colours in the
   launcher itself.
-- **The frame** (`launcher/src/shell.rs`): the sidebar is one plate from the window's top to its
-  bottom (the wordmark, instances by group, servers, the launcher's version); the top bar over the
-  pages has no plate, only a rule. A selected row or tab sits on `card_hi` cut in steps (two for
-  rows, one for tabs and icon buttons); a hovered one gets the same shape at half its opacity,
-  eased in. A row's second line is its state, after a small square in the state's colour.
-- **Home** (`launcher/src/home.rs`): the selected instance's name in the display cut over the bare
-  sky, a caption above it naming what it plays and its state (the same square), and when it was
-  played below. Play is the main action (`night::PLAY` tall, cut in one step); the version picker
-  is a raised control of the same height; Mods and Folder are quiet buttons. A Horizon instance
-  gets a plate on the right: a release's notes in one line (not a Nightly's) and Join a friend.
+- **The frame** (`launcher/src/shell.rs`, `Launcher::sidebar`, `Launcher::pane_header`,
+  `Launcher::tab_strip`): the sidebar is one plate from the window's top to its bottom, in three
+  parts: the wordmark, then a list that scrolls (the instances under "Java instances", the
+  hosted servers under "Servers"), then a foot pinned to the bottom (the launcher's own actions
+  stacked full width, most important first, the community links, and who plays with Add account).
+  The pane beside it opens with a header band — the instance's icon, its name, what it plays and
+  when it was last played, then its folder, its version and Play — and under that a single strip
+  of tabs. The pane is flat: no art behind the cards. A selected row sits on `card_hi` cut in
+  steps (two for rows, one for icon buttons); a hovered one gets the same shape at half its
+  opacity, eased in. A tab is its tinted name, how many things it holds as a badge, and a 2 px
+  underline in the tint while it is the one shown. A row's second line is its state, after a small
+  square in the state's colour.
+- **Home** (`launcher/src/home.rs`): the header band names the instance and what it plays, and
+  offers its folder, its version and Play. Play is the main action (`night::PLAY` tall, cut in one
+  step); the version picker is a raised control of the same height; Open folder is a raised one
+  too. A Horizon instance gets a plate at the foot of Overview: a release's notes in one line (not
+  a Nightly's) and Join a friend.
   While it gets ready, Play names it ("Getting ready… 34%") beside Cancel, and below sit the
   bar, what is happening with the time left, and the steps (game files, Java, sounds, prepare,
   play), the current one lit, those done ticked: steps, never the log
   (`HORIZON_LAUNCHER_PAGE=getting-ready` shows it for screenshots, nothing runs).
-- **Instance icons** (`launcher/src/instance_icons.rs`): the sidebar's rows, Home's hero (beside
-  the name) and the instance dialog show the same icon. Its own picture first (`icon.png` in its
+- **Instance icons** (`launcher/src/instance_icons.rs`): the sidebar's rows, the header band
+  (beside the name) and the instance dialog show the same icon. Its own picture first (`icon.png` in its
   game folder: one the player chose with Choose image…, scaled to 128 pixels, or its modpack's
   icon from where it was installed), else the block or colour chosen in the dialog, else its
   mark: the loader's logo (Fabric, Quilt, Forge, NeoForge), the grass block for plain Minecraft,
   Horizon's for Horizon. The letter tile is the last resort. The New instance dialog's loader
   cards show the same logos. Pixel-art logos are scaled by whole
   pixels; each is decoded once per size.
-- **The instance's tabs** (`launcher/src/home_tabs.rs`): under Home's hero, one tab at a time
-  instead of one long page: Overview (what Play needs: the instance, the game or its resources,
-  the account), Worlds, Multiplayer, Packs, then Screenshots and Console once they have something.
-  A tab names how many it holds ("Worlds 3"); its own buttons (Add server, Open folder) sit at the
-  strip's end, where a list's header would put them (`HORIZON_LAUNCHER_PAGE=worlds`, `packs`...
-  opens one for screenshots).
+- **The instance's tabs** (`launcher/src/home_tabs.rs`): in the pane's strip, ahead of the
+  launcher's own pages, one tab at a time instead of one long page: Overview (what Play needs: the
+  instance, the game or its resources, the account), Mods, Worlds, Multiplayer, Packs, then
+  Screenshots and Console once they have something. A tab names how many it holds ("Worlds 3");
+  the open tab's own buttons (Add server, Open folder) sit above its content, on the right, where a
+  list's header would put them (`HORIZON_LAUNCHER_PAGE=worlds`, `packs`... opens one for
+  screenshots).
 - **The Mods tab** (`launcher/src/instance_mods.rs`): the instance's mods on one nearly opaque
   card, its loader in the header ("Fabric mods", "Horizon mods") beside a filter. A row is the
   mod's own icon (Modrinth's, else its jar's, else a glyph), its name and version, where it comes from (Modrinth,

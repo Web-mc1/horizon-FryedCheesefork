@@ -26,8 +26,7 @@ pub const RADIUS: f32 = 0.;
 pub const RADIUS_PLATE: f32 = 0.;
 /// Buttons are a little taller than the quiet look's, for their lip.
 pub const CONTROL: f32 = 34.;
-/// The top bar, and the sidebar of instances and servers.
-pub const TOPBAR: f32 = 56.;
+/// The sidebar of instances and servers, and the page gutter beside it.
 pub const SIDEBAR: f32 = 288.;
 pub const PAGE_GUTTER: f32 = 32.;
 /// The tab strips' tints, in the order the pages and the home tabs take them: the main action's

@@ -62,8 +62,12 @@ impl Launcher {
         out
     }
 
-    /// The menu under the account chip, while open.
-    pub(super) fn account_menu(&self, cx: &mut Context<Self>) -> Option<impl IntoElement> {
+    /// The menu under (or, in the sidebar's foot, above) the account row, while open.
+    pub(super) fn account_menu(
+        &self,
+        above: bool,
+        cx: &mut Context<Self>,
+    ) -> Option<impl IntoElement> {
         if !self.account_menu {
             return None;
         }
@@ -72,9 +76,13 @@ impl Launcher {
         let mut menu = div()
             .id("account-menu")
             .absolute()
-            .top(px(46.))
-            .right_0()
-            .w(px(280.))
+            .w(px(280.));
+        menu = if above {
+            menu.bottom(px(52.)).left_0()
+        } else {
+            menu.top(px(46.)).right_0()
+        };
+        let mut menu = menu
             .p(px(6.))
             .border_2()
             .border_color(t.outline)
