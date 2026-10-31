@@ -66,6 +66,7 @@ jobs:
         if: failure()
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
           RUN: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           body=$(cat <<'EOF'
@@ -86,6 +87,13 @@ jobs:
           )
           body="$body
           Run: $RUN"
+          # A fork can have issues turned off, so the run's summary always gets this too: a failed
+          # sync must never be silent.
+          printf '%s\n' "$body" >>"$GITHUB_STEP_SUMMARY"
+          if [ "$(gh api "repos/$REPO" --jq .has_issues 2>/dev/null)" != true ]; then
+            echo "Issues are off on $REPO, so this is in the run's summary only." >&2
+            exit 0
+          fi
           existing=$(gh issue list --state open --search 'in:title "upstream sync failed"' --json number --jq '.[0].number // empty')
           if [ -n "$existing" ]; then
             gh issue comment "$existing" --body "$body"
