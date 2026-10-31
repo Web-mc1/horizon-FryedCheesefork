@@ -1,10 +1,61 @@
-# Paths whose local version always wins when upstream is merged (scripts/sync-upstream.sh).
-# Add a path as soon as you customise it; everything here stops taking upstream fixes,
-# so keep the list tight.
+# Paths whose version in this fork always wins when upstream is merged (scripts/sync-upstream.sh).
+#
+# Everything here takes *no* upstream change at all, so keep the list tight. A path belongs
+# here when merging it line by line would bring back a screen, a colour or a layout we
+# replaced; not merely the brand name, which scripts/rebrand.pl and scripts/rebrand-game.sh
+# put back after every merge anyway. `git merge -X ours` already keeps this side of any line
+# upstream also changed, so the files below are the ones where that is not enough: whole
+# files, because our version of them is a design, not a patch.
+#
+# A directory protects everything under it.
+
+# The launcher's look, its layout and the mark it draws.
+launcher/src/main.rs
+launcher/src/lib.rs
 launcher/src/theme.rs
-launcher/src/themes/
 launcher/src/titlebar.rs
 launcher/src/home.rs
 launcher/src/home_tabs.rs
+launcher/src/instances_page.rs
+launcher/src/instance_icons.rs
 launcher/src/plate.rs
+launcher/src/shell.rs
+launcher/src/switch_page.rs
+launcher/src/themes/
+launcher/src/while_playing.rs
+launcher/src/worlds_page.rs
+launcher/src/art.rs
 launcher/assets/
+
+# The player's own picture beside their name, and where it comes from.
+launcher/src/avatar.rs
+
+# The AI Agent page this fork deleted, and the module that registered it: a deleted screen has to
+# stay deleted when upstream keeps editing it (the script resolves that automatically).
+launcher/src/agents.rs
+
+# The game's own screens: the settings menu without AI Agent, its title, its palette.
+crates/horizon-client/src/title.rs
+crates/horizon-client/src/game.rs
+crates/horizon-client/src/game/agent_settings.rs
+crates/horizon-client/src/game/control.rs
+crates/horizon-client/src/game/options.rs
+crates/horizon-client/src/game/startup_menu.rs
+crates/horizon-client/assets/horizon/lang/
+crates/horizon-client-render/src/extras.rs
+crates/horizon-client-render/src/options_ui.rs
+crates/horizon-theme/
+
+# The icon set: the cheese emoji on every platform, and the game's window icon.
+packaging/icons/
+crates/horizon-theme/icons/
+
+# The fork's own documents and the scripts that re-apply the brand.
+CRISPY.md
+crispy-ui.txt
+THIRD_PARTY_NOTICES.md
+docs/agent-control.md
+docs/design-system.md
+docs/upstream-sync.md
+scripts/
+.github/workflows/sync-upstream.yml

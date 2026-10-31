@@ -1,39 +1,115 @@
 #!/usr/bin/env bash
-# Merge upstream horizon without letting it overwrite the crispy UI.
+# Brings horizon-rust/horizon's newest work into this fork and keeps everything that makes it
+# Crispy Launcher.
+#
+# How the two are reconciled, in order:
+#
+#   1. `git merge -X ours` — every upstream change comes in, except where upstream and this
+#      fork changed the same lines: there this fork's side stays.
+#   2. The paths in crispy-ui.txt are put back exactly as they were, whole files: the look,
+#      the layout, the screens we replaced. Upstream never wins those.
+#   3. scripts/rebrand.sh and scripts/rebrand-game.sh run again, because upstream keeps
+#      writing "Horizon" into new strings and new language entries.
+#
+# The result is committed but not pushed: the workflow (.github/workflows/sync-upstream.yml)
+# builds and tests it first, and only then pushes. Run `cargo test --manifest-path
+# launcher/Cargo.toml` yourself before pushing when you run this by hand.
+#
+# Exits 0 when there was nothing to do or the merge committed, 2 for a dirty checkout, and 3
+# when the merge cannot be settled automatically (nothing is changed in that case).
 set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
 
 UPSTREAM_REMOTE="${UPSTREAM_REMOTE:-upstream}"
 UPSTREAM_BRANCH="${UPSTREAM_BRANCH:-main}"
+UPSTREAM_URL="${UPSTREAM_URL:-https://github.com/horizon-rust/horizon.git}"
 
-git remote get-url "$UPSTREAM_REMOTE" >/dev/null 2>&1 ||
-    git remote add "$UPSTREAM_REMOTE" https://github.com/horizon-rust/horizon.git
-git fetch "$UPSTREAM_REMOTE" "$UPSTREAM_BRANCH"
+say() { printf '%s\n' "$*" >&2; }
 
-if ! git rev-parse -q --verify MERGE_HEAD >/dev/null; then
-    if git merge-base --is-ancestor "$UPSTREAM_REMOTE/$UPSTREAM_BRANCH" HEAD; then
-        echo "Already up to date with $UPSTREAM_REMOTE/$UPSTREAM_BRANCH."
-        exit 0
+# GitHub Actions reads this to know whether there is a commit to build and push.
+merged() {
+    [ -z "${GITHUB_OUTPUT:-}" ] || printf 'merged=%s\n' "$1" >>"$GITHUB_OUTPUT"
+}
+
+if ! git remote get-url "$UPSTREAM_REMOTE" >/dev/null 2>&1; then
+    say "Adding $UPSTREAM_URL as $UPSTREAM_REMOTE."
+    git remote add "$UPSTREAM_REMOTE" "$UPSTREAM_URL"
+fi
+
+git fetch --quiet "$UPSTREAM_REMOTE" "$UPSTREAM_BRANCH"
+target="$UPSTREAM_REMOTE/$UPSTREAM_BRANCH"
+
+if git merge-base --is-ancestor "$target" HEAD; then
+    say "Already up to date with $target."
+    merged false
+    exit 0
+fi
+
+if [ -n "$(git status --porcelain)" ]; then
+    say "This checkout has uncommitted changes; commit or stash them first, so the merge is one commit."
+    exit 2
+fi
+
+start=$(git rev-parse HEAD)
+say "Merging $target ($(git rev-list --count "HEAD..$target") upstream commits)."
+
+# --no-commit keeps HEAD at $start while the merge sits in the index, so the protected paths
+# can be taken from this fork's own commit below and the whole thing lands as one commit.
+if ! git merge --no-commit --no-ff -X ours "$target"; then
+    # -X ours settles every changed line. What it cannot settle is a file one side deleted and
+    # the other edited, and deleting a screen is one of this fork's changes: a file we deleted
+    # stays deleted, however much upstream edited it afterwards.
+    left=0
+    while IFS= read -r path; do
+        [ -n "$path" ] || continue
+        if ! git cat-file -e "$start:$path" 2>/dev/null && git cat-file -e "$target:$path" 2>/dev/null; then
+            git rm --quiet -f --ignore-unmatch -- "$path"
+            say "Kept deleted: $path"
+        else
+            say "Could not settle: $path"
+            left=$((left + 1))
+        fi
+    done <<<"$(git diff --name-only --diff-filter=U)"
+
+    if [ "$left" -gt 0 ]; then
+        git merge --abort 2>/dev/null || true
+        say "Upstream and this fork disagree on $left path(s) this script cannot call. Nothing was"
+        say "changed; merge it by hand with: git merge $target"
+        merged false
+        exit 3
     fi
-    git merge --no-ff --no-commit "$UPSTREAM_REMOTE/$UPSTREAM_BRANCH" || true
 fi
 
 kept=0
 while IFS= read -r path; do
     case "$path" in ''|'#'*) continue ;; esac
     [ -e "$path" ] || continue
-    if git checkout HEAD -- "$path" 2>/dev/null; then
-        git add -A -- "$path"
-        kept=$((kept + 1))
-    fi
+    git checkout "$start" -- "$path"
+    kept=$((kept + 1))
 done < crispy-ui.txt
-echo "Kept $kept protected UI path(s) from your branch."
+say "Kept $kept protected path(s) exactly as they were."
 
 ./scripts/rebrand.sh
+./scripts/rebrand-game.sh
 
 git add -A
 if git diff --cached --quiet; then
-    echo "Nothing to commit."
+    # Everything upstream changed was a protected path (or the brand alone), so there is no
+    # merge to record: put the checkout back exactly as it was rather than leave it mid-merge.
+    git merge --abort 2>/dev/null || git reset --hard --quiet "$start"
+    say "Upstream had nothing this fork did not already have; the checkout is unchanged."
+    merged false
     exit 0
 fi
-git commit -m "Merge $UPSTREAM_REMOTE/$UPSTREAM_BRANCH, keeping the crispy UI"
+
+git commit --quiet -m "Merge $target, keeping the Crispy Launcher changes" -m \
+"This is scripts/sync-upstream.sh: upstream's changes came in, the lines it changed that this
+fork also changed stayed ours, the paths in crispy-ui.txt were kept whole, and the brand was
+re-applied to the strings upstream added.
+
+Build and test before pushing: cargo test --manifest-path launcher/Cargo.toml"
+
+merged true
+say "Merged into $(git rev-parse --short HEAD). Next:"
+say "  cargo test --manifest-path launcher/Cargo.toml"
+say "  git push origin HEAD:main"

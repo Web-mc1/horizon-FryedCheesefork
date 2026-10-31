@@ -1,0 +1,94 @@
+name: sync upstream
+# Brings horizon-rust/horizon into this fork once a day, and keeps Crispy Launcher.
+#
+# scripts/sync-upstream.sh does the merge and commits it; this workflow builds and tests that
+# commit and only then pushes it, so main never goes red because of a sync. When the merge or
+# the build fails, nothing is pushed and one issue says what to fix (it comments on that same
+# issue instead of opening a new one each night).
+#
+# Run it by hand from the Actions tab: "sync upstream" > "Run workflow".
+on:
+  schedule:
+    - cron: "17 4 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  issues: write
+
+concurrency:
+  group: sync-upstream
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          # The default token, so the push below can write.
+          token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Say who is committing
+        run: |
+          git config user.name "crispy-launcher sync"
+          git config user.email "sync@users.noreply.github.com"
+      - name: Merge upstream, keeping the Crispy Launcher changes
+        id: merge
+        run: ./scripts/sync-upstream.sh
+      - name: Install Rust and the headers GPUI links against
+        if: steps.merge.outputs.merged == 'true'
+        run: |
+          sudo apt-get update && sudo apt-get install -y --no-install-recommends libxkbcommon-x11-dev libwayland-dev \
+            libx11-xcb-dev libfontconfig-dev libvulkan-dev libasound2-dev libudev-dev
+          rustup toolchain install stable --profile minimal --component rustfmt --component clippy
+      - uses: Swatinem/rust-cache@v2
+        if: steps.merge.outputs.merged == 'true'
+        with:
+          workspaces: launcher
+          shared-key: launcher
+      - name: Bring the command reference up to date with the merged command line
+        if: steps.merge.outputs.merged == 'true'
+        working-directory: launcher
+        run: |
+          HORIZON_WRITE_DOCS=1 cargo test --locked the_launcher_reference_is_up_to_date || true
+          git -C .. add docs/launcher-commands.md
+          git -C .. diff --cached --quiet || git -C .. commit --quiet --amend --no-edit
+      - name: Build the merged tree and run its tests
+        if: steps.merge.outputs.merged == 'true'
+        working-directory: launcher
+        run: cargo test --locked
+      - name: Push the merge
+        if: steps.merge.outputs.merged == 'true'
+        run: git push origin HEAD:main
+      - name: Tell the player what to fix
+        if: failure()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RUN: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          body=$(cat <<'EOF'
+          The nightly merge of horizon-rust/horizon into this fork did not go through cleanly, so
+          nothing was pushed and main is unchanged.
+
+          What to do: run ./scripts/sync-upstream.sh locally and read what it says.
+
+          - Exit 2 (dirty checkout): commit or stash first.
+          - Exit 3 (the merge could not be settled): git could not keep both sides on its own.
+            Merge upstream/main by hand, and add whatever it fought over to crispy-ui.txt if it
+            is a screen we replaced.
+          - A failing test: upstream changed something a protected file still calls, usually
+            launcher/src/main.rs. Take upstream's version of the parts we never touched.
+
+          Close this issue once the sync is green; the next failure opens a new one.
+          EOF
+          )
+          body="$body
+          Run: $RUN"
+          existing=$(gh issue list --state open --search 'in:title "upstream sync failed"' --json number --jq '.[0].number // empty')
+          if [ -n "$existing" ]; then
+            gh issue comment "$existing" --body "$body"
+          else
+            gh issue create --title "upstream sync failed" --body "$body"
+          fi

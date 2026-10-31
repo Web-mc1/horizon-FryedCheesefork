@@ -25,6 +25,13 @@ for my $file (@ARGV) {
     close $in;
     my $orig = $src;
 
+    # A line ending in `// brand: keep` is left exactly as it is. Some words are data, not
+    # text — the registry's own author name, a URL, a key upstream compares by value — and
+    # renaming them would change what the code looks for, not what the player reads. The
+    # marker protects the whole line, so write it on a line whose content stands alone.
+    my @kept;
+    $src =~ s/^(.*brand: keep.*)$/push @kept, $1; "\x01" . $#kept . "\x01"/gme;
+
     if ($file =~ /[.](md|json)$/) {
         $src =~ s/(?<![A-Za-z0-9_])Horizon(?![A-Za-z0-9_])/$B/g;
     } else {
@@ -42,6 +49,8 @@ for my $file (@ARGV) {
         # "crispylauncher launcher" reads redundant.
         $src =~ s/$B launcher/$B/g;
     }
+
+    $src =~ s/\x01(\d+)\x01/$kept[$1]/ge;
 
     next if $src eq $orig;
 

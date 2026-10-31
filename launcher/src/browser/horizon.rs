@@ -227,9 +227,11 @@ fn kind_of(kind: &index::Kind) -> Option<Kind> {
 /// Where the registry's mod policy is: who owns and answers for a project, takedowns.
 pub const POLICY: &str = "https://playhorizon.dev/mods/policy";
 
-/// The author name the registry's official projects carry: the registry's own records say
-/// "Horizon", and a registry run by this fork says "crispylauncher". Either is the project.
-const OFFICIAL_AUTHORS: [&str; 2] = ["Horizon", "crispylauncher"];
+/// The author names the registry's official projects carry: the registry's own records use
+/// upstream's name, and a registry run by this fork uses "crispylauncher". Either is the
+/// project. The upstream name is data, not display text, so the rebrand script must not
+/// rewrite it.
+const OFFICIAL_AUTHORS: [&str; 2] = ["Horizon", "crispylauncher"]; // brand: keep
 
 /// Whether the crispylauncher project made `p` (the mod policy's "Official": one of its own author
 /// names, and source in the horizon-rust organisation).
