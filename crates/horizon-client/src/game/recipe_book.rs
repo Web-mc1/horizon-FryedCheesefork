@@ -54,6 +54,16 @@ impl Button {
     fn craftable(&self) -> bool {
         self.entries.iter().any(|e| e.1)
     }
+    /// The entry at `step` (cycled), or `None` for an empty button.
+    /// Click paths used `entries[step % len]` directly, which panics
+    /// with `division by zero` when `entries` is empty; `View` building
+    /// now skips empty buttons, and this keeps the clicks safe too.
+    fn entry_at(&self, step: usize) -> Option<(usize, bool)> {
+        if self.entries.is_empty() {
+            return None;
+        }
+        Some(self.entries[step % self.entries.len()])
+    }
 }
 #[derive(Default)]
 struct View {
@@ -608,6 +618,12 @@ impl Game<'_> {
             } else {
                 entries
             };
+            // An empty button would divide by zero on `step % entries.len()`
+            // on the next click; the non-filtering path above can produce
+            // one when every entry is deselected.
+            if entries.is_empty() {
+                continue;
+            }
             buttons.push(Button { entries });
         }
         View { tabs, buttons }
@@ -745,7 +761,9 @@ impl Game<'_> {
                 }
             } else {
                 let step = self.swap_index();
-                let (entry, _) = button.entries[step % button.entries.len()];
+                let Some((entry, _)) = button.entry_at(step) else {
+                    continue;
+                };
                 let shift = self.shift_down();
                 if self.try_place(entry, shift) {
                     self.remember_click(entry);
@@ -916,6 +934,9 @@ impl Game<'_> {
         let first = self.recipe_ui.page * 20;
         (0..20).find_map(|n| {
             let button = self.recipe_ui.view.buttons.get(first + n)?;
+            if button.entries.is_empty() {
+                return None;
+            }
             let (x, y) = Self::button_pos(xo, yo, n);
             inside(cursor, x, y, 25.0, 25.0)
                 .then(|| button.entries[self.swap_index() % button.entries.len()].0)
@@ -1890,5 +1911,26 @@ fn sub_rect(r: Rect, [x, y, w, h]: [f32; 4]) -> Rect {
         v1: r.v0 + (y + h) * dv,
         w: w as u32,
         h: h as u32,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    /// An empty button must not panic on `step % len`; it returns `None`.
+    /// Before the fix, `entries[step % entries.len()]` panicked with
+    /// `division by zero` on a click of a button whose recipes were all
+    /// deselected on the non-filtering path.
+    #[test]
+    fn empty_recipe_button_entries_return_none_instead_of_panicking() {
+        let empty = Button::default();
+        assert_eq!(empty.entry_at(0), None);
+        let one = Button { entries: vec![(7, true)] };
+        assert_eq!(one.entry_at(0), Some((7, true)));
+        assert_eq!(one.entry_at(5), Some((7, true)));
+        let two = Button { entries: vec![(3, false), (9, true)] };
+        assert_eq!(two.entry_at(0), Some((3, false)));
+        assert_eq!(two.entry_at(1), Some((9, true)));
+        assert_eq!(two.entry_at(2), Some((3, false)));
     }
 }
