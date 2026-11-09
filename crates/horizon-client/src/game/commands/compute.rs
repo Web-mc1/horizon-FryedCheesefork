@@ -18,6 +18,16 @@ pub(in crate::game) struct ComputeContext {
 /// An ArithmeticException's message.
 type Arith = String;
 
+/// `context_float_provider` `avg`: the mean of `xs`, or an error for empty
+/// (mirroring the int provider, which errors `/ by zero` rather than
+/// silently returning `NaN` from `0.0 / 0.0`).
+pub(in crate::game) fn avg_f32(xs: &[f32]) -> Result<f32, Arith> {
+    if xs.is_empty() {
+        return Err("/ by zero".into());
+    }
+    Ok(xs.iter().fold(0.0f32, |a, &x| a + x) / xs.len() as f32)
+}
+
 fn java_float(v: f32) -> String {
     horizon_client::snbt::java_float(v)
 }
@@ -333,10 +343,7 @@ impl Game<'_> {
                     "constant" => field(self, "value")?,
                     "add" => inputs(self)?.iter().fold(0.0f32, |a, &x| a + x),
                     "mul" => inputs(self)?.iter().fold(1.0f32, |a, &x| a * x),
-                    "avg" => {
-                        let xs = inputs(self)?;
-                        xs.iter().fold(0.0f32, |a, &x| a + x) / xs.len() as f32
-                    }
+                    "avg" => avg_f32(&inputs(self)?)?,
                     "length" => inputs(self)?.iter().fold(0.0f32, |a, &x| a + x * x).sqrt(),
                     "max" => inputs(self)?.into_iter().fold(-f32::MAX, f32::max),
                     "min" => inputs(self)?.into_iter().fold(f32::MAX, f32::min),
@@ -537,5 +544,18 @@ impl Game<'_> {
             }
             _ => false,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::avg_f32;
+    /// Float `avg` of empty inputs must error like int `avg` (`/ by zero`),
+    /// not silently return `NaN` from `0.0 / 0.0`.
+    #[test]
+    fn float_avg_of_empty_errors_instead_of_nan() {
+        assert_eq!(avg_f32(&[]), Err("/ by zero".to_owned()));
+        assert_eq!(avg_f32(&[2.0]), Ok(2.0));
+        assert_eq!(avg_f32(&[1.0, 3.0]), Ok(2.0));
     }
 }
