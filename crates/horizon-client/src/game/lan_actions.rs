@@ -3814,12 +3814,21 @@ impl Game<'_> {
         };
         self.ui.registries.permission = level;
         let mut lines = self.chat_capture.take().unwrap_or_default();
-        let mut host = self.lan.take().expect("a command puts the hub back");
+        // A guest command (e.g. a teleport or disconnect) may clear self.lan.
+        // In that case the command already ran but the guest turn is over;
+        // we cannot continue to leave_guest or send feedback.
+        let mut host = match self.lan.take() {
+            Some(host) => host,
+            None => return None,
+        };
         self.leave_guest(&mut host, swap);
         if std::mem::take(&mut self.save_after_guest_turn) {
             self.lan = Some(host);
             lines.push(self.save_all_reply());
-            host = self.lan.take().expect("saving puts the hub back");
+            host = match self.lan.take() {
+                Some(host) => host,
+                None => return None,
+            };
         }
         host.hub.sync_all_effects();
         if !c.integrated {
