@@ -1,6 +1,6 @@
 # Benchmark: Horizon vs vanilla 26.3
 
-`tools/perf_bench.py` measures Horizon, the vanilla 26.3 client and vanilla with performance mods on the same machine, the same world and the same camera path, and computes every number with the same code. This page says what it measures, how it keeps the comparison fair, what it can't control, and how to reproduce it. The results are in [Results](#results).
+`tools/perf_bench.py` measures Horizon, the vanilla 26.3 client, and vanilla with performance mods on the same machine, world, and camera path, computing every number with the same code. This page says what it measures, how it keeps the comparison fair, what it can't control, and how to reproduce it. The results are in [Results](#results).
 
 ## What is measured
 
@@ -46,7 +46,7 @@ The report is the [benchmark report format](benchmark-report.md): startup to the
 
 ## Reproduce it
 
-You need Horizon built (`cargo build --release -p horizon-client -p horizon-client-lib --bins`) and its resources prepared from your own copy of 26.3 (which also provides `.local/minecraft/26.3`, the vanilla client the driver starts), Java 25 with `javac`, and Python 3.10 or newer.
+You need Horizon built (`cargo build --release -p horizon-client -p horizon-client-lib --bins`) and its resources prepared from your own copy of 26.3 (which also provides `.local/minecraft/26.3`, the vanilla client the driver starts), Java 25 with `javac`, and Python 3.11 or newer.
 
 ```sh
 python3 tools/perf_bench.py --game horizon --label horizon-mine

@@ -235,6 +235,24 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
                 }
                 Class::Note => {
                     let next = table.cycle(state, p.note);
+                    let old_note = table.int(state, p.note);
+                    let new_note = table.int(next, p.note);
+                    let instrument = table.text(state, p.instrument);
+                    let Some(note) = self
+                        .level
+                        .note_block_change(pos, instrument, old_note, new_note)
+                    else {
+                        return Success;
+                    };
+                    let next = table.set_int(
+                        next,
+                        p.note,
+                        if (0..=24).contains(&note) {
+                            note
+                        } else {
+                            new_note
+                        },
+                    );
                     if !self.note_play_allowed(pos, next) {
                         return Success;
                     }
@@ -920,18 +938,6 @@ impl Behaviours {
                         | "minecraft:player_head"
                 )
             })
-        {
-            return Some(InteractionResult::Pass);
-        }
-        // WallHangingSignBlock.useItemOn: a hanging sign aimed at the sign's side
-        // (not its editable faces, `isHittingEditableSide`) chains onto it. Sign
-        // text has no click commands here, so `canExecuteClickCommands` is false.
-        if self.data(state).is(Class::WallHangingSign)
-            && item
-                .and_then(|i| self.item_binding(i))
-                .is_some_and(|binding| binding.kind == super::data::ItemKind::HangingSign)
-            && face != self.facing(state)
-            && face != self.facing(state).opposite()
         {
             return Some(InteractionResult::Pass);
         }

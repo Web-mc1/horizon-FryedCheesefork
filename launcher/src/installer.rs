@@ -13,6 +13,7 @@
 //! `horizon-launcher-setup.exe` (window), `... setup --quiet [--dir <folder>] [--desktop-shortcut]`,
 //! `horizon-launcher.exe uninstall` (window), `... uninstall --quiet [--remove-data]`.
 use crate::backend;
+use crate::data_location::{self, Roots};
 use crate::shortcut;
 use std::fs;
 use std::io;
@@ -28,16 +29,14 @@ const UNINSTALL_KEY: &str = r"Software\Microsoft\Windows\CurrentVersion\Uninstal
 const OWN_KEY: &str = r"Software\Horizon\Launcher";
 const ASIDE_PREFIX: &str = "horizon-launcher-uninstall-";
 
-/// What the setup window shows: installing, or removing.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Mode {
-    Install,
-    Uninstall,
-}
+pub use crate::setup_args::Mode;
+use crate::setup_args::{classify, Invocation};
 
 /// The parts of the work, for the progress line.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Step {
+    /// Uninstall: asking a running launcher to quit.
+    Closing,
     Files,
     Shortcuts,
     Registry,
@@ -96,12 +95,14 @@ pub fn is_setup_exe() -> bool {
 /// The window to open instead of the launcher: the wizard for the setup exe started without
 /// arguments, the uninstaller for `uninstall`. None: this is the launcher.
 pub fn window_mode() -> Option<Mode> {
-    let args = args();
-    match args.as_slice() {
-        [] if is_setup_exe() => Some(Mode::Install),
-        [a] if a.as_str() == "uninstall" => Some(Mode::Uninstall),
+    match invocation() {
+        Invocation::Window(mode) => Some(mode),
         _ => None,
     }
+}
+
+fn invocation() -> Invocation {
+    classify(&args(), is_setup_exe())
 }
 
 /// `%LOCALAPPDATA%\Programs\Horizon Launcher`; `HORIZON_LAUNCHER_SETUP_DIR` replaces it (tests).
@@ -256,25 +257,73 @@ fn register(dir: &Path, exe: &Path, version: &str) -> io::Result<()> {
     Ok(())
 }
 
-/// Uninstall copies that stepped aside in %TEMP% in earlier runs and are no longer in use.
-fn clean_temp() {
+/// Uninstall copies that stepped aside in earlier runs and are no longer in use: in %TEMP%, and
+/// beside `install` (the install folder) when %TEMP% was on another drive.
+fn clean_aside(install: &Path) {
     let own = format!("{ASIDE_PREFIX}{}.exe", std::process::id());
-    let Ok(entries) = fs::read_dir(std::env::temp_dir()) else {
-        return;
-    };
-    for entry in entries.flatten() {
-        let name = entry.file_name().to_string_lossy().to_string();
-        if name.starts_with(ASIDE_PREFIX) && name.ends_with(".exe") && name != own {
-            let _ = fs::remove_file(entry.path());
+    let temp = std::env::temp_dir();
+    let places =
+        crate::uninstall_aside::aside_dirs(&install.to_string_lossy(), &temp.to_string_lossy());
+    for place in std::iter::once(temp).chain(places.into_iter().map(PathBuf::from)) {
+        for entry in fs::read_dir(&place).into_iter().flatten().flatten() {
+            let name = entry.file_name().to_string_lossy().to_string();
+            if name.starts_with(ASIDE_PREFIX) && name.ends_with(".exe") && name != own {
+                let _ = fs::remove_file(entry.path());
+            }
         }
     }
 }
 
+/// Moves the running launcher out of `dir` so the folder can go: into %TEMP% when it is on the
+/// same drive, else beside `dir` as a hidden file (a rename never crosses volumes: os error 17).
+/// Windows deletes it at the next restart when the account may ask that (administrators), and
+/// the next setup or uninstall clears it anyway ([`clean_aside`]).
+fn step_aside(own: &Path, dir: &Path) -> io::Result<()> {
+    let name = format!("{ASIDE_PREFIX}{}.exe", std::process::id());
+    let temp = std::env::temp_dir();
+    let mut last = io::Error::new(io::ErrorKind::NotFound, "no folder to step aside to");
+    for place in crate::uninstall_aside::aside_dirs(&dir.to_string_lossy(), &temp.to_string_lossy())
+    {
+        let aside = Path::new(&place).join(&name);
+        match fs::rename(own, &aside) {
+            Ok(()) => {
+                if !same_path(Path::new(&place), &temp) {
+                    hide(&aside);
+                }
+                delete_at_restart(&aside);
+                return Ok(());
+            }
+            Err(e) => last = e,
+        }
+    }
+    Err(last)
+}
+
+fn wide(path: &Path) -> Vec<u16> {
+    use std::os::windows::ffi::OsStrExt;
+    path.as_os_str().encode_wide().chain([0]).collect()
+}
+
+fn hide(path: &Path) {
+    use windows_sys::Win32::Storage::FileSystem::{SetFileAttributesW, FILE_ATTRIBUTE_HIDDEN};
+    let path = wide(path);
+    // SAFETY: `path` is a NUL-terminated UTF-16 string that outlives the call.
+    unsafe { SetFileAttributesW(path.as_ptr(), FILE_ATTRIBUTE_HIDDEN) };
+}
+
+/// Best effort: without administrator rights Windows refuses, and [`clean_aside`] does it later.
+fn delete_at_restart(path: &Path) {
+    use windows_sys::Win32::Storage::FileSystem::{MoveFileExW, MOVEFILE_DELAY_UNTIL_REBOOT};
+    let path = wide(path);
+    // SAFETY: as in `hide`; a null new name means "delete".
+    unsafe { MoveFileExW(path.as_ptr(), std::ptr::null(), MOVEFILE_DELAY_UNTIL_REBOOT) };
+}
+
 /// Installs the launcher this process is into `options.dir`. Returns the installed `.exe`.
 pub fn install(options: &Options, progress: impl Fn(Step, f32)) -> Result<PathBuf, String> {
-    clean_temp();
     let source = std::env::current_exe().map_err(|e| e.to_string())?;
     let dir = options.dir.clone();
+    clean_aside(&dir);
     if dir.file_name().is_none() {
         return Err(format!("{} is not a folder to install in.", dir.display()));
     }
@@ -317,12 +366,96 @@ fn remove_all(path: &Path, left: &mut Vec<String>) {
     }
 }
 
+/// The ids of the other launchers running now (this process is a launcher too).
+fn running_launchers() -> Vec<u32> {
+    let out = crate::process::command("tasklist")
+        .args([
+            "/FO",
+            "CSV",
+            "/NH",
+            "/FI",
+            "IMAGENAME eq horizon-launcher.exe",
+        ])
+        .output();
+    out.map(|o| {
+        crate::setup_args::other_launcher_pids(
+            &String::from_utf8_lossy(&o.stdout),
+            std::process::id(),
+        )
+    })
+    .unwrap_or_default()
+}
+
+/// Asks a launcher that is still open to quit (a window closing is how it shuts down), waits a
+/// few seconds, and ends what stays: the player pressed Uninstall, and its files are going.
+/// The game a launcher started is another process and keeps running.
+fn close_running_launchers(progress: &impl Fn(Step, f32)) {
+    let taskkill = |pid: u32, force: bool| {
+        let mut cmd = crate::process::command("taskkill");
+        cmd.args(["/PID", &pid.to_string()]);
+        if force {
+            cmd.arg("/F");
+        }
+        let _ = cmd.output();
+    };
+    let mut pids = running_launchers();
+    if pids.is_empty() {
+        return;
+    }
+    progress(Step::Closing, 0.05);
+    for &pid in &pids {
+        taskkill(pid, false);
+    }
+    for _ in 0..30 {
+        std::thread::sleep(std::time::Duration::from_millis(250));
+        pids = running_launchers();
+        if pids.is_empty() {
+            return;
+        }
+    }
+    for pid in pids {
+        taskkill(pid, true);
+    }
+    std::thread::sleep(std::time::Duration::from_millis(500));
+}
+
+/// The data location the player moved the launcher's data to (Settings > Data folder), when
+/// [`backend::data_dir`] follows it: not under `HORIZON_LAUNCHER_HOME`, which comes first.
+fn moved_location() -> Option<Roots> {
+    if std::env::var_os("HORIZON_LAUNCHER_HOME").is_some_and(|p| !p.is_empty()) {
+        return None;
+    }
+    data_location::configured_roots().ok().flatten()
+}
+
+fn named(path: &Path, name: &str) -> bool {
+    let Some(last) = path.file_name() else {
+        return false;
+    };
+    last.eq_ignore_ascii_case(name)
+}
+
+/// Whether `data`, the folder [`backend::data_dir`] names, is one the launcher made, so that
+/// `--remove-data` may delete it: the default `horizon-launcher` folder, or the `launcher` folder
+/// of a moved data location, which the move lays out as `<folder>\launcher`, `\game` and `\build`.
+fn made_by_launcher(data: &Path, location: Option<&Roots>) -> bool {
+    let laid_out = location.is_some_and(|r| r.launcher == data && named(&r.launcher, "launcher"));
+    named(data, "horizon-launcher") || laid_out
+}
+
+/// Whether `builds`, [`backend::build_dir`], goes with a data folder the launcher made. In a moved
+/// location it is `<folder>\build` or inside the launcher folder; elsewhere it is always ours.
+fn builds_are_launchers(builds: &Path, data: &Path, location: Option<&Roots>) -> bool {
+    location.is_none() || builds.starts_with(data) || named(builds, "build")
+}
+
 /// Takes the install away. Returns what could not be removed (a file in use, say).
 pub fn uninstall(remove_data: bool, progress: impl Fn(Step, f32)) -> Result<Vec<String>, String> {
-    clean_temp();
     let dir = registered()
         .ok_or("Horizon Launcher is not installed for this account.")?
         .dir;
+    close_running_launchers(&progress);
+    clean_aside(&dir);
     let exe = dir.join(BINARY);
     let own = backend::exe_path().to_path_buf();
     let mut left = Vec::new();
@@ -366,11 +499,9 @@ pub fn uninstall(remove_data: bool, progress: impl Fn(Step, f32)) -> Result<Vec<
     }
 
     progress(Step::Removing, 0.55);
-    // The running file can be renamed but not deleted: it steps out of the folder into %TEMP%
-    // (the same volume), and the next setup or uninstall clears it ([`clean_temp`]).
+    // The running file can be renamed but not deleted: it steps out of the folder ([`step_aside`]).
     if own.starts_with(&dir) {
-        let aside = std::env::temp_dir().join(format!("{ASIDE_PREFIX}{}.exe", std::process::id()));
-        if let Err(e) = fs::rename(&own, &aside) {
+        if let Err(e) = step_aside(&own, &dir) {
             left.push(format!("{}: {e}", own.display()));
         }
     }
@@ -393,16 +524,21 @@ pub fn uninstall(remove_data: bool, progress: impl Fn(Step, f32)) -> Result<Vec<
     if remove_data {
         progress(Step::Data, 0.8);
         let data = backend::data_dir();
-        // Only the folder the launcher itself names: `HORIZON_LAUNCHER_HOME` may point anywhere.
-        if data
-            .file_name()
-            .is_some_and(|n| n.eq_ignore_ascii_case("horizon-launcher"))
-        {
+        let location = moved_location();
+        // Only a folder the launcher made: `HORIZON_LAUNCHER_HOME` may point anywhere.
+        if made_by_launcher(&data, location.as_ref()) {
             remove_all(&data, &mut left);
             // A profile whose name isn't ASCII keeps the build folder in %ProgramData%
             // (`backend::build_dir`); it is the launcher's too. Already gone with `data` otherwise.
             let builds = backend::build_dir();
-            remove_all(&builds, &mut left);
+            if builds_are_launchers(&builds, &data, location.as_ref()) {
+                remove_all(&builds, &mut left);
+            } else {
+                left.push(format!(
+                    "{} (not the launcher's own folder)",
+                    builds.display()
+                ));
+            }
         } else {
             left.push(format!(
                 "{} (not the launcher's own folder)",
@@ -442,11 +578,8 @@ pub fn after_update(version: &str) {
 pub fn run_quiet() -> Option<i32> {
     let args = args();
     let flag = |name: &str| args.iter().any(|a| a == name);
-    if !flag("--quiet") {
-        return None;
-    }
-    match args.first().map(String::as_str) {
-        Some("uninstall") => Some(match uninstall(flag("--remove-data"), |_, _| {}) {
+    match invocation() {
+        Invocation::QuietUninstall => Some(match uninstall(flag("--remove-data"), |_, _| {}) {
             Ok(left) => {
                 for item in left {
                     eprintln!("Not removed: {item}");
@@ -458,7 +591,7 @@ pub fn run_quiet() -> Option<i32> {
                 1
             }
         }),
-        Some("setup") if is_setup_exe() => {
+        Invocation::QuietSetup => {
             let mut options = Options::new();
             if let Some(dir) = args
                 .iter()
@@ -499,6 +632,56 @@ mod tests {
         );
     }
 
+    fn moved_to(folder: &str) -> Roots {
+        let folder = PathBuf::from(folder);
+        Roots {
+            launcher: folder.join("launcher"),
+            game: folder.join("game"),
+            build: folder.join("build"),
+        }
+    }
+
+    #[test]
+    fn uninstall_deletes_only_folders_the_launcher_made() {
+        // The default folder, and one `HORIZON_LAUNCHER_HOME` names the same.
+        let default = Path::new(r"C:\Users\p\AppData\Roaming\horizon-launcher");
+        assert!(made_by_launcher(default, None));
+        assert!(builds_are_launchers(default, default, None));
+        assert!(!made_by_launcher(Path::new(r"D:\Documents"), None));
+        assert!(!made_by_launcher(Path::new(r"D:\Games\launcher"), None));
+
+        // Data moved to D:\Horizon (`data_location::layout`): its launcher and build folders go,
+        // the game folder never.
+        let moved = moved_to(r"D:\Horizon");
+        assert!(made_by_launcher(&moved.launcher, Some(&moved)));
+        assert!(builds_are_launchers(
+            &moved.build,
+            &moved.launcher,
+            Some(&moved)
+        ));
+        assert!(!made_by_launcher(&moved.game, Some(&moved)));
+        // A build folder inside the launcher folder goes with it.
+        let inside = Path::new(r"D:\Horizon\launcher\build");
+        assert!(builds_are_launchers(inside, &moved.launcher, Some(&moved)));
+
+        // Not what a move lays out (a location file edited by hand): left alone.
+        let odd = Roots {
+            launcher: PathBuf::from(r"D:\Documents"),
+            ..moved.clone()
+        };
+        assert!(!made_by_launcher(&odd.launcher, Some(&odd)));
+        let odd = Roots {
+            build: PathBuf::from(r"D:\Documents"),
+            ..moved.clone()
+        };
+        assert!(!builds_are_launchers(&odd.build, &odd.launcher, Some(&odd)));
+        // Another folder called `launcher` than the configured one.
+        assert!(!made_by_launcher(
+            Path::new(r"D:\Elsewhere\launcher"),
+            Some(&moved)
+        ));
+    }
+
     /// What the shell itself reads as the shortcut's target: the field Explorer starts from.
     fn target_of(link: &Path) -> String {
         use windows::core::{Interface, HSTRING};
@@ -524,7 +707,14 @@ mod tests {
 
     #[test]
     fn the_shell_reads_the_target_of_the_shortcut_it_gets() {
-        let dir = std::env::temp_dir().join(format!("horizon-link-{}", std::process::id()));
+        // GitHub's Windows runners give TEMP as an 8.3 short path (C:\Users\RUNNER~1\...), which the
+        // shell hands back expanded: start from the long path, as an install folder is.
+        let temp = fs::canonicalize(std::env::temp_dir()).unwrap();
+        let temp = temp
+            .to_str()
+            .and_then(|t| t.strip_prefix(r"\\?\"))
+            .map_or(temp.clone(), PathBuf::from);
+        let dir = temp.join(format!("horizon-link-{}", std::process::id()));
         let _ = fs::remove_dir_all(&dir);
         let exe = dir.join("Horizon Launcher").join("horizon-launcher.exe");
         fs::create_dir_all(exe.parent().unwrap()).unwrap();
